@@ -1,45 +1,96 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import React, { useState } from 'react';
+import { StatusBar, StyleSheet, View } from 'react-native';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+import { COLORS } from './src/theme/colors';
+import { useCallTracker } from './src/hooks/useCallTracker';
+import { useCallMetrics } from './src/hooks/useCallMetrics';
+import { AppNavigator } from './src/components/navigation/AppNavigator';
+import { CallOutcomeModal } from './src/components/outcome/CallOutcomeModal';
+import { CallRecord } from './src/types';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+function MainApp() {
+  const insets = useSafeAreaInsets();
+  const tracker = useCallTracker();
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
-    </SafeAreaProvider>
+  // Authoritative metrics: today-only separated from lifetime
+  const { todayCalls, todayMetrics, lifetimeMetrics } = useCallMetrics(
+    tracker.callHistory
   );
-}
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
+  // Manual or automatic outcome disposition target
+  const [manualOutcomeCall, setManualOutcomeCall] = useState<CallRecord | null>(null);
+
+  // If there's an automatic pending call from CallEnded or a manual selection
+  const activeOutcomeCall = tracker.pendingOutcomeCall || manualOutcomeCall;
 
   return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
+    <View
+      style={[
+        styles.root,
+        {
+          paddingTop: Math.max(insets.top, 8),
+          paddingBottom: insets.bottom,
+        },
+      ]}>
+      <AppNavigator
+        callState={tracker.callState}
+        phoneNumber={tracker.phoneNumber}
+        setPhoneNumber={tracker.setPhoneNumber}
+        activeNumber={tracker.activeNumber}
+        activeContactName={tracker.activeContactName}
+        currentDuration={tracker.currentDuration}
+        todayMetrics={todayMetrics}
+        todayCalls={todayCalls}
+        lifetimeMetrics={lifetimeMetrics}
+        allCalls={tracker.callHistory}
+        filteredCalls={tracker.filteredHistory}
+        allCallsCount={tracker.callHistory.length}
+        isLoadingHistory={tracker.isLoadingHistory}
+        searchQuery={tracker.searchQuery}
+        setSearchQuery={tracker.setSearchQuery}
+        selectedFilter={tracker.selectedFilter}
+        setSelectedFilter={tracker.setSelectedFilter}
+        isListening={tracker.isListening}
+        permissionGranted={tracker.permissionGranted}
+        statusMessage={tracker.statusMessage}
+        onMakeCall={tracker.makeCall}
+        onRefreshHistory={() => tracker.loadCallHistory(true)}
+        onRequestPermissions={tracker.requestPermissions}
+        onSelectCall={(call: CallRecord) => setManualOutcomeCall(call)}
+      />
+
+      {/* Global Call Disposition Modal */}
+      <CallOutcomeModal
+        visible={Boolean(activeOutcomeCall)}
+        call={activeOutcomeCall}
+        onSave={(callId, outcomeId, notes) => {
+          tracker.saveCallOutcome(callId, outcomeId, notes);
+          setManualOutcomeCall(null);
+        }}
+        onDismiss={() => {
+          tracker.dismissOutcomeModal();
+          setManualOutcomeCall(null);
+        }}
       />
     </View>
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <StatusBar barStyle="light-content" />
+      <MainApp />
+    </SafeAreaProvider>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
+    backgroundColor: '#121316',
   },
 });
-
-export default App;
