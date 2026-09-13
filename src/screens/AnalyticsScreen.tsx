@@ -148,29 +148,24 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
         {/* Today's Call Results Distribution */}
         <Text style={styles.subSectionTitle}>TODAY'S CALL RESULTS</Text>
-        {todayMetrics.totalAttempts === 0 ? (
-          <Text style={styles.emptyText}>No calls made today yet</Text>
-        ) : (
-          DEFAULT_CALL_OUTCOMES.map(outcome => {
-            const count = todayMetrics.outcomeDistribution[outcome.id] || 0;
-            const pct = todayMetrics.totalAttempts > 0
-              ? Math.round((count / todayMetrics.totalAttempts) * 100)
-              : 0;
-            if (count === 0 && outcome.category !== 'POSITIVE') return null;
-            return (
-              <View key={outcome.id} style={styles.outcomeRow}>
-                <View style={styles.outcomeHeader}>
-                  <View style={styles.outcomeNameRow}>
-                    <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
-                    <Text style={styles.outcomeLabel}>{outcome.label}</Text>
-                  </View>
-                  <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
+        {DEFAULT_CALL_OUTCOMES.map(outcome => {
+          const count = todayMetrics.outcomeDistribution[outcome.id] || 0;
+          const pct = todayMetrics.totalAttempts > 0
+            ? Math.round((count / todayMetrics.totalAttempts) * 100)
+            : 0;
+          return (
+            <View key={outcome.id} style={styles.outcomeRow}>
+              <View style={styles.outcomeHeader}>
+                <View style={styles.outcomeNameRow}>
+                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
+                  <Text style={styles.outcomeLabel}>{outcome.label}</Text>
                 </View>
-                <ProgressBar progress={pct} color={outcome.color} height={4} />
+                <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
               </View>
-            );
-          })
-        )}
+              <ProgressBar progress={pct} color={outcome.color} height={4} />
+            </View>
+          );
+        })}
       </Card>
 
       {/* ========================================================================= */}
@@ -238,6 +233,29 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
             </Text>
           </View>
         </View>
+
+        {/* Month's Call Results Distribution */}
+        <Text style={styles.subSectionTitle}>MONTH'S CALL RESULTS</Text>
+        {DEFAULT_CALL_OUTCOMES.map(outcome => {
+          const count = monthMetrics.outcomeDistribution[outcome.id] || 0;
+          const pct = monthMetrics.totalAttempts > 0
+            ? Math.round((count / monthMetrics.totalAttempts) * 100)
+            : 0;
+          return (
+            <View key={outcome.id} style={styles.outcomeRow}>
+              <View style={styles.outcomeHeader}>
+                <View style={styles.outcomeNameRow}>
+                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
+                  <Text style={styles.outcomeLabel}>{outcome.label}</Text>
+                </View>
+                <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
+              </View>
+              <ProgressBar progress={pct} color={outcome.color} height={4} />
+            </View>
+          );
+        })}
+
+        <View style={styles.divider} />
 
         {/* Day-by-Day Performance Breakdown (Strictly Day 1 -> Today) */}
         <Text style={styles.subSectionTitle}>DAY-BY-DAY PERFORMANCE</Text>
@@ -319,7 +337,6 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
           const pct = lifetimeMetrics.totalAttempts > 0
             ? Math.round((count / lifetimeMetrics.totalAttempts) * 100)
             : 0;
-          if (count === 0 && outcome.category !== 'POSITIVE') return null;
           return (
             <View key={outcome.id} style={styles.outcomeRow}>
               <View style={styles.outcomeHeader}>
