@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  BackHandler,
   ScrollView,
   StyleSheet,
   Text,
@@ -33,6 +34,18 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentDate.getMonth());
+  const [showDailyBreakdown, setShowDailyBreakdown] = useState<boolean>(false);
+
+  // Handle hardware back button on Android
+  useEffect(() => {
+    if (!showDailyBreakdown) return;
+    const backAction = () => {
+      setShowDailyBreakdown(false);
+      return true;
+    };
+    const subscription = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => subscription.remove();
+  }, [showDailyBreakdown]);
 
   // Monthly Date Range & Valid Days (No future days)
   const monthData = getMonthRange(selectedYear, selectedMonthIndex);
@@ -84,6 +97,112 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   const isNextDisabled =
     selectedYear === currentDate.getFullYear() &&
     selectedMonthIndex >= currentDate.getMonth();
+
+  if (showDailyBreakdown) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}>
+        {/* Navigation & Return Header */}
+        <View style={styles.subpageHeader}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            onPress={() => setShowDailyBreakdown(false)}
+            style={styles.backButton}>
+            <Text style={styles.backButtonArrow}>←</Text>
+            <Text style={styles.backButtonText}>Back to Analytics</Text>
+          </TouchableOpacity>
+          <Badge label={monthData.monthLabel} variant="outline" size="sm" />
+        </View>
+
+        {/* Subpage Title Block */}
+        <View style={styles.subpageTitleBlock}>
+          <Text style={styles.title}>Day-by-Day Breakdown</Text>
+          <Text style={styles.subtitle}>
+            Daily calling activity & metrics for {monthData.monthLabel}
+          </Text>
+        </View>
+
+        {/* Month Summary Bar */}
+        <Card variant="default" style={styles.monthSummaryMiniCard}>
+          <View style={styles.monthSummaryRow}>
+            <View style={styles.monthSummaryItem}>
+              <Text style={styles.monthSummaryLabel}>Total Calls</Text>
+              <Text style={styles.monthSummaryValue}>{monthMetrics.totalAttempts}</Text>
+            </View>
+            <View style={styles.monthSummaryItem}>
+              <Text style={styles.monthSummaryLabel}>Connected</Text>
+              <Text style={styles.monthSummaryValue}>{monthMetrics.totalConnected}</Text>
+            </View>
+            <View style={styles.monthSummaryItem}>
+              <Text style={styles.monthSummaryLabel}>Not Connected</Text>
+              <Text style={styles.monthSummaryValueMuted}>{monthMetrics.totalUnconnected}</Text>
+            </View>
+            <View style={styles.monthSummaryItem}>
+              <Text style={styles.monthSummaryLabel}>Talk Time</Text>
+              <Text style={styles.monthSummaryValue}>
+                {formatVerboseDuration(monthMetrics.totalDurationSeconds)}
+              </Text>
+            </View>
+          </View>
+        </Card>
+
+        {/* Day-by-Day List */}
+        <Text style={styles.subSectionTitle}>DAILY ACTIVITY BREAKDOWN</Text>
+        <View style={styles.daysList}>
+          {monthData.days.slice().reverse().map(bucket => {
+            const dayCalls = callsByDay.get(bucket.dayNumber) || [];
+            const dayMetrics = calculateMetrics(dayCalls);
+            const hasCalls = dayCalls.length > 0;
+            return (
+              <View
+                key={bucket.dayNumber}
+                style={[
+                  styles.dayRow,
+                  bucket.isToday && styles.dayRowToday,
+                  !hasCalls && styles.dayRowEmpty,
+                ]}>
+                <View style={styles.dayDateCol}>
+                  <Text
+                    style={[
+                      styles.dayDateText,
+                      bucket.isToday && styles.dayDateToday,
+                      !hasCalls && styles.dayDateTextMuted,
+                    ]}>
+                    {bucket.dateString} {bucket.isToday ? '(Today)' : ''}
+                  </Text>
+                </View>
+
+                <View style={styles.dayMetricsCol}>
+                  <Text
+                    style={[
+                      styles.dayCallsText,
+                      !hasCalls && styles.dayCallsTextMuted,
+                    ]}>
+                    {dayCalls.length} {dayCalls.length === 1 ? 'call' : 'calls'} •{' '}
+                    {dayMetrics.totalConnected} connected
+                  </Text>
+                  <Text style={styles.dayTalkTimeText}>
+                    {formatVerboseDuration(dayMetrics.totalDurationSeconds)}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Bottom Return Button */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setShowDailyBreakdown(false)}
+          style={styles.bottomReturnButton}>
+          <Text style={styles.bottomReturnButtonText}>← Return to Overview</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -257,32 +376,26 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
         <View style={styles.divider} />
 
-        {/* Day-by-Day Performance Breakdown (Strictly Day 1 -> Today) */}
-        <Text style={styles.subSectionTitle}>DAY-BY-DAY PERFORMANCE</Text>
-        <View style={styles.daysList}>
-          {monthData.days.slice().reverse().map(bucket => {
-            const dayCalls = callsByDay.get(bucket.dayNumber) || [];
-            const dayMetrics = calculateMetrics(dayCalls);
-            return (
-              <View key={bucket.dayNumber} style={styles.dayRow}>
-                <View style={styles.dayDateCol}>
-                  <Text style={[styles.dayDateText, bucket.isToday && styles.dayDateToday]}>
-                    {bucket.dateString} {bucket.isToday ? '(Today)' : ''}
-                  </Text>
-                </View>
-
-                <View style={styles.dayMetricsCol}>
-                  <Text style={styles.dayCallsText}>
-                    {dayCalls.length} calls • {dayMetrics.totalConnected} connected
-                  </Text>
-                  <Text style={styles.dayTalkTimeText}>
-                    {formatVerboseDuration(dayMetrics.totalDurationSeconds)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
-        </View>
+        {/* Button to open dedicated Day-by-Day Performance page for this month */}
+        <TouchableOpacity
+          activeOpacity={0.75}
+          onPress={() => setShowDailyBreakdown(true)}
+          style={styles.viewBreakdownBanner}>
+          <View style={styles.viewBreakdownLeft}>
+            <View style={styles.calendarIconBox}>
+              <Text style={styles.calendarIconText}>📅</Text>
+            </View>
+            <View style={styles.viewBreakdownTextGroup}>
+              <Text style={styles.viewBreakdownTitle}>Day-by-Day Performance</Text>
+              <Text style={styles.viewBreakdownSubtitle}>
+                View detailed daily breakdown for {monthData.monthLabel}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.viewBreakdownRight}>
+            <Text style={styles.viewBreakdownArrow}>→</Text>
+          </View>
+        </TouchableOpacity>
       </Card>
 
       {/* ========================================================================= */}
@@ -581,5 +694,145 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 12,
+  },
+  subpageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#20222A',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2B2D38',
+  },
+  backButtonArrow: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  backButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  subpageTitleBlock: {
+    marginBottom: 16,
+  },
+  monthSummaryMiniCard: {
+    backgroundColor: '#1C1D22',
+    borderColor: '#272932',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 18,
+  },
+  monthSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  monthSummaryItem: {
+    alignItems: 'center',
+  },
+  monthSummaryLabel: {
+    fontSize: 10,
+    color: '#8D919C',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  monthSummaryValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  monthSummaryValueMuted: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  bottomReturnButton: {
+    marginTop: 24,
+    marginBottom: 16,
+    paddingVertical: 14,
+    backgroundColor: '#20222A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2B2D38',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomReturnButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewBreakdownBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#20222A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2B2D38',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 6,
+  },
+  viewBreakdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  calendarIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#262832',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarIconText: {
+    fontSize: 16,
+  },
+  viewBreakdownTextGroup: {
+    flex: 1,
+  },
+  viewBreakdownTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewBreakdownSubtitle: {
+    fontSize: 11,
+    color: '#8D919C',
+    marginTop: 2,
+  },
+  viewBreakdownRight: {
+    paddingLeft: 8,
+  },
+  viewBreakdownArrow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#38BDF8',
+  },
+  dayRowToday: {
+    borderColor: '#38BDF8',
+  },
+  dayRowEmpty: {
+    opacity: 0.7,
+  },
+  dayDateTextMuted: {
+    color: '#64748B',
+  },
+  dayCallsTextMuted: {
+    color: '#64748B',
   },
 });
