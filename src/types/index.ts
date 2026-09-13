@@ -38,9 +38,6 @@ export interface CallRecord {
   type?: number | CallType;
 }
 
-// Type alias for backward compatibility with existing components
-export type CallHistoryItem = CallRecord;
-
 export interface EmployeeMetrics {
   totalAttempts: number;
   totalConnected: number;
@@ -54,19 +51,6 @@ export interface EmployeeMetrics {
 export type FilterTab = 'ALL' | 'CONNECTED' | 'NOT_CONNECTED' | 'OUTGOING' | 'INCOMING' | 'MISSED';
 
 export type TabRoute = 'dashboard' | 'calls' | 'analytics' | 'profile';
-
-export interface CallTypeMeta {
-  label: string;
-  icon: string;
-  color: string;
-  bg: string;
-}
-
-export interface PermissionStatus {
-  phoneState: boolean;
-  callPhone: boolean;
-  callLog: boolean;
-}
 
 export type CallTrackerEvents = {
   CallStateChanged: [string];

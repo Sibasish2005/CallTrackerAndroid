@@ -20,7 +20,6 @@ interface AnalyticsScreenProps {
   todayMetrics: EmployeeMetrics;
   todayCalls: CallRecord[];
   lifetimeMetrics: EmployeeMetrics;
-  allCalls: CallRecord[];
   appCalls?: CallRecord[];
 }
 
@@ -28,7 +27,6 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   todayMetrics,
   todayCalls,
   lifetimeMetrics,
-  allCalls,
   appCalls = [],
 }) => {
   const currentDate = new Date();
@@ -50,8 +48,8 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   // Monthly Date Range & Valid Days (No future days)
   const monthData = getMonthRange(selectedYear, selectedMonthIndex);
 
-  // Filter calls for the selected month
-  const monthCalls = (allCalls || []).filter(call => {
+  // Filter calls for the selected month (strictly HEEYAKU app calls)
+  const monthCalls = appCalls.filter(call => {
     const timestamp = Number(call.startedAt || call.date || 0);
     return timestamp >= monthData.range.startMs && timestamp <= monthData.range.endMs;
   });

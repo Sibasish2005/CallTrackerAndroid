@@ -1,20 +1,15 @@
 import React from 'react';
-import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
 import { COLORS } from '../../theme/colors';
 
 export type IconName =
-  | 'home'
   | 'call'
   | 'analytics'
   | 'profile'
   | 'search'
-  | 'check'
   | 'close'
   | 'arrow-outgoing'
-  | 'arrow-incoming'
-  | 'clock'
-  | 'grid'
-  | 'refresh';
+  | 'arrow-incoming';
 
 interface IconProps {
   name: IconName;
@@ -32,37 +27,8 @@ export const Icon: React.FC<IconProps> = ({
   const stroke = 1.8;
 
   switch (name) {
-    case 'home':
-      // Minimalist geometric house: triangle roof + body
-      return (
-        <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-          <View
-            style={{
-              width: size * 0.75,
-              height: size * 0.75,
-              borderTopWidth: stroke,
-              borderLeftWidth: stroke,
-              borderColor: color,
-              transform: [{ rotate: '45deg' }],
-              top: 2,
-            }}
-          />
-          <View
-            style={{
-              width: size * 0.65,
-              height: size * 0.45,
-              borderWidth: stroke,
-              borderTopWidth: 0,
-              borderColor: color,
-              borderRadius: 1,
-              marginTop: -size * 0.28,
-            }}
-          />
-        </View>
-      );
-
     case 'call': {
-      // Classic normal telephone handset receiver (Monochromatic)
+      // Classic normal telephone handset receiver
       const s = size;
       return (
         <View
@@ -226,23 +192,6 @@ export const Icon: React.FC<IconProps> = ({
         </View>
       );
 
-    case 'check':
-      return (
-        <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-          <View
-            style={{
-              width: size * 0.55,
-              height: size * 0.3,
-              borderLeftWidth: stroke * 1.2,
-              borderBottomWidth: stroke * 1.2,
-              borderColor: color,
-              transform: [{ rotate: '-45deg' }],
-              top: -1,
-            }}
-          />
-        </View>
-      );
-
     case 'close':
       return (
         <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
@@ -277,16 +226,18 @@ export const Icon: React.FC<IconProps> = ({
               borderTopWidth: stroke,
               borderRightWidth: stroke,
               borderColor: color,
-              transform: [{ rotate: '0deg' }],
+              position: 'absolute',
+              top: size * 0.15,
+              right: size * 0.15,
             }}
           />
           <View
             style={{
-              width: stroke,
-              height: size * 0.65,
+              width: size * 0.75,
+              height: stroke,
               backgroundColor: color,
               position: 'absolute',
-              transform: [{ rotate: '45deg' }],
+              transform: [{ rotate: '-45deg' }],
             }}
           />
         </View>
@@ -302,70 +253,24 @@ export const Icon: React.FC<IconProps> = ({
               borderBottomWidth: stroke,
               borderLeftWidth: stroke,
               borderColor: color,
-              transform: [{ rotate: '0deg' }],
+              position: 'absolute',
+              bottom: size * 0.15,
+              left: size * 0.15,
             }}
           />
           <View
             style={{
-              width: stroke,
-              height: size * 0.65,
+              width: size * 0.75,
+              height: stroke,
               backgroundColor: color,
               position: 'absolute',
-              transform: [{ rotate: '45deg' }],
+              transform: [{ rotate: '-45deg' }],
             }}
           />
         </View>
       );
 
-    case 'clock':
-      return (
-        <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-          <View
-            style={{
-              width: size * 0.8,
-              height: size * 0.8,
-              borderRadius: size * 0.4,
-              borderWidth: stroke,
-              borderColor: color,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-            <View
-              style={{
-                width: stroke,
-                height: size * 0.26,
-                backgroundColor: color,
-                position: 'absolute',
-                top: size * 0.12,
-              }}
-            />
-            <View
-              style={{
-                width: size * 0.22,
-                height: stroke,
-                backgroundColor: color,
-                position: 'absolute',
-                right: size * 0.15,
-              }}
-            />
-          </View>
-        </View>
-      );
-
-    case 'grid':
     default:
-      return (
-        <View style={[{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }, style]}>
-          <View
-            style={{
-              width: size * 0.6,
-              height: size * 0.6,
-              borderWidth: stroke,
-              borderColor: color,
-              borderRadius: 2,
-            }}
-          />
-        </View>
-      );
+      return null;
   }
 };

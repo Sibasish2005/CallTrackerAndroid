@@ -107,7 +107,6 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             todayMetrics={todayMetrics}
             todayCalls={todayCalls}
             lifetimeMetrics={lifetimeMetrics}
-            allCalls={allCalls}
             appCalls={appCalls}
           />
         )}

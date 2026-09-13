@@ -31,18 +31,6 @@ export function getTodayStartTimestamp(): number {
   return startOfToday.getTime();
 }
 
-/**
- * Returns the Daily range: today 00:00 -> current time
- */
-export function getTodayRange(): DateRange {
-  const startMs = getTodayStartTimestamp();
-  const endMs = Date.now();
-  return {
-    startMs,
-    endMs,
-    label: "Today's Performance",
-  };
-}
 
 /**
  * Checks if a given timestamp occurred strictly today (local calendar day)
@@ -110,16 +98,5 @@ export function getMonthRange(year: number, monthIndex: number): {
     days,
     monthLabel,
     isCurrentMonth,
-  };
-}
-
-/**
- * Returns Lifetime range: 0 -> current time
- */
-export function getLifetimeRange(): DateRange {
-  return {
-    startMs: 0,
-    endMs: Date.now(),
-    label: 'All-Time Performance',
   };
 }

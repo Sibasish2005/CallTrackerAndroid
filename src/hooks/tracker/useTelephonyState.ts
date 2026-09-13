@@ -48,13 +48,27 @@ export function useTelephonyState({
   const activeNumberRef = useRef<string>('');
   const reachedOffhookRef = useRef<boolean>(false);
 
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Helper to schedule a single debounced reload of call records
+  const scheduleHistoryReload = useCallback(() => {
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current);
+    }
+    reloadTimeoutRef.current = setTimeout(() => {
+      onCallEndedReloadHistory();
+      reloadTimeoutRef.current = null;
+    }, 800);
+  }, [onCallEndedReloadHistory]);
+
   // Start telephony callback listener
   const startCallListener = useCallback(async () => {
     try {
       if (CallTracker?.startCallStateListener) {
         const res = await CallTracker.startCallStateListener();
+        console.log('Call state listener started:', res);
         setIsListening(true);
-        onStatusMessage(`Listener: ${res}`);
+        onStatusMessage('Telephony callback registered');
       }
     } catch (error: any) {
       console.log('Start listener error:', error?.message);
@@ -100,10 +114,8 @@ export function useTelephonyState({
           offhookTimestampRef.current = null;
           setCurrentDuration(0);
 
-          // Give native system 800ms to commit call log, then refresh
-          setTimeout(() => {
-            onCallEndedReloadHistory();
-          }, 800);
+          // Schedule a single debounced reload (in case CallEnded doesn't fire)
+          scheduleHistoryReload();
         }
       },
     );
@@ -147,10 +159,8 @@ export function useTelephonyState({
         setActiveNumber('');
         setActiveContactName('');
 
-        // Re-sync with actual CallLog
-        setTimeout(() => {
-          onCallEndedReloadHistory();
-        }, 600);
+        // Single debounced reload with actual CallLog
+        scheduleHistoryReload();
       },
     );
 
@@ -160,8 +170,11 @@ export function useTelephonyState({
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
       }
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current);
+      }
     };
-  }, [onCallEndedEvent, onCallEndedReloadHistory]);
+  }, [onCallEndedEvent, scheduleHistoryReload]);
 
   // Initiate an outgoing call
   const makeCall = async (numToCall?: string, contactName?: string) => {

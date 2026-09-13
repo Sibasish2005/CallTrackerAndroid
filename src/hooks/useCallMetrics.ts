@@ -63,7 +63,6 @@ export interface CallMetricsResult {
   todayCalls: CallRecord[];
   todayMetrics: EmployeeMetrics;
   lifetimeMetrics: EmployeeMetrics;
-  calculatePeriodMetrics: (calls: CallRecord[]) => EmployeeMetrics;
 }
 
 export function useCallMetrics(
@@ -93,7 +92,6 @@ export function useCallMetrics(
       todayCalls,
       todayMetrics,
       lifetimeMetrics,
-      calculatePeriodMetrics: calculateMetrics,
     };
   }, [allCalls, appOnlyCalls]);
 }
