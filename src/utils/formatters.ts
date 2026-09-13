@@ -94,7 +94,7 @@ export function getCallTypeMeta(type?: CallType | number, connected: boolean = t
 
   if (type === 3 || type === 5 || type === 'MISSED' || type === 'REJECTED' || !connected) {
     return {
-      label: 'Unconnected',
+      label: 'Not Connected',
       icon: '↙',
       color: '#EF4444',
       bg: 'rgba(239, 68, 68, 0.15)',

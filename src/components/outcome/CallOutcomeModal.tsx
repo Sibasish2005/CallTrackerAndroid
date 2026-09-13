@@ -73,7 +73,7 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
 
             <View style={styles.statusBadge}>
               <Text style={styles.statusText}>
-                {isConnected ? `Connected • ${formatVerboseDuration(duration)}` : 'Unconnected'}
+                {isConnected ? `Connected • ${formatVerboseDuration(duration)}` : 'Not Connected'}
               </Text>
             </View>
           </View>

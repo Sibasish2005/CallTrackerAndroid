@@ -60,7 +60,7 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
             />
 
             <Text style={styles.metaText}>
-              {isConnected ? formatVerboseDuration(duration) : 'Unconnected'}
+              {isConnected ? formatVerboseDuration(duration) : 'Not Connected'}
             </Text>
 
             {item.outcomeLabel ? (

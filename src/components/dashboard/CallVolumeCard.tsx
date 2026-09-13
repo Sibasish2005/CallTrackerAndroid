@@ -49,7 +49,7 @@ export const CallVolumeCard: React.FC<CallVolumeCardProps> = ({ metrics }) => {
             <View style={styles.legendItem}>
               <View style={styles.legendDotOther} />
               <Text style={styles.legendText}>
-                Unconnected ({unconnected})
+                Not Connected ({unconnected})
               </Text>
             </View>
           </View>

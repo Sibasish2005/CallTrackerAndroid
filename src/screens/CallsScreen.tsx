@@ -35,7 +35,7 @@ interface CallsScreenProps {
 const FILTER_OPTIONS: { id: FilterTab; label: string }[] = [
   { id: 'ALL', label: 'All' },
   { id: 'CONNECTED', label: 'Connected' },
-  { id: 'NOT_CONNECTED', label: 'Unconnected' },
+  { id: 'NOT_CONNECTED', label: 'Not Connected' },
   { id: 'OUTGOING', label: 'Outgoing' },
   { id: 'INCOMING', label: 'Incoming' },
   { id: 'MISSED', label: 'Missed' },
