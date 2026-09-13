@@ -58,6 +58,7 @@ yarn-error.log
 
 # APK build artifacts
 *.apk
+android/app/src/main/assets/index.android.bundle*
 
 # Ruby / CocoaPods
 **/Pods/

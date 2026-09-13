@@ -1,9 +1,5 @@
 import React, { useState } from 'react';
 import { StatusBar, StyleSheet, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
 import { COLORS } from './src/theme/colors';
 import { useCallTracker } from './src/hooks/useCallTracker';
 import { useCallMetrics } from './src/hooks/useCallMetrics';
@@ -12,7 +8,7 @@ import { CallOutcomeModal } from './src/components/outcome/CallOutcomeModal';
 import { CallRecord } from './src/types';
 
 function MainApp() {
-  const insets = useSafeAreaInsets();
+  const statusBarHeight = StatusBar.currentHeight ?? 24;
   const tracker = useCallTracker();
 
   // Authoritative metrics: strictly computed from HEEYAKU app-initiated calls
@@ -32,8 +28,7 @@ function MainApp() {
       style={[
         styles.root,
         {
-          paddingTop: Math.max(insets.top, 8),
-          paddingBottom: insets.bottom,
+          paddingTop: statusBarHeight,
         },
       ]}>
       <AppNavigator
@@ -83,10 +78,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
+    <>
       <StatusBar barStyle="light-content" />
       <MainApp />
-    </SafeAreaProvider>
+    </>
   );
 }
 
