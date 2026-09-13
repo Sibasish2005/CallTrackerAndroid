@@ -59,7 +59,6 @@ export const CallVolumeCard: React.FC<CallVolumeCardProps> = ({ metrics }) => {
         <View style={styles.bottomRightCol}>
           <View style={styles.deltaNumberRow}>
             <Text style={styles.bottomGiantNumber}>{attempts}</Text>
-            <Text style={styles.deltaIndicator}>▲</Text>
           </View>
         </View>
       </View>
