@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Keyboard,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -162,15 +161,30 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
           </Text>
           <TouchableOpacity
             onPress={onRefresh}
+            disabled={isLoading}
             delayPressIn={0}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.refreshButton}>
-            <Text style={styles.refreshButtonText}>↻ Refresh</Text>
+            style={[styles.refreshButton, isLoading && styles.refreshButtonDisabled]}>
+            {isLoading ? (
+              <View style={styles.refreshLoadingContainer}>
+                <ActivityIndicator size="small" color={COLORS.monoSilver} style={styles.miniSpinner} />
+                <Text style={styles.refreshButtonText}>Syncing...</Text>
+              </View>
+            ) : (
+              <Text style={styles.refreshButtonText}>↻ Refresh</Text>
+            )}
           </TouchableOpacity>
         </View>
+
+        {/* Subtle lazy loading indicator line when syncing with existing items */}
+        {isLoading && filteredCalls.length > 0 && (
+          <View style={styles.lazyLoadingBarContainer}>
+            <View style={styles.lazyLoadingBar} />
+          </View>
+        )}
       </View>
 
-      {/* Calls History List */}
+      {/* Calls History List with Lazy Loading Skeletons */}
       <FlatList
         data={filteredCalls}
         keyExtractor={item => item.id}
@@ -186,25 +200,30 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
             onQuickCall={(num, name) => onMakeCall(num, name)}
           />
         )}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={onRefresh}
-            tintColor={COLORS.monoWhite}
-            colors={[COLORS.monoWhite]}
-          />
-        }
         ListEmptyComponent={
-          !isLoading ? (
+          isLoading ? (
+            <View style={styles.skeletonList}>
+              {[1, 2, 3, 4].map(key => (
+                <View key={key} style={styles.skeletonRow}>
+                  <View style={styles.skeletonAvatar} />
+                  <View style={styles.skeletonBody}>
+                    <View style={styles.skeletonName} />
+                    <View style={styles.skeletonSub} />
+                    <View style={styles.skeletonMetaRow}>
+                      <View style={styles.skeletonMetaIcon} />
+                      <View style={styles.skeletonMetaText} />
+                    </View>
+                  </View>
+                  <View style={styles.skeletonCallBtn} />
+                </View>
+              ))}
+            </View>
+          ) : (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>No HEEYAKU calls yet</Text>
               <Text style={styles.emptySubtitle}>
                 Calls dialed using the Quick Cellular Dialer above will appear here
               </Text>
-            </View>
-          ) : (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={COLORS.monoWhite} />
             </View>
           )
         }
@@ -346,10 +365,95 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
+  refreshButtonDisabled: {
+    opacity: 0.7,
+  },
+  refreshLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniSpinner: {
+    transform: [{ scale: 0.75 }],
+  },
   refreshButtonText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.monoSilver,
+  },
+  lazyLoadingBarContainer: {
+    height: 2,
+    width: '100%',
+    backgroundColor: '#262832',
+    marginTop: 8,
+    borderRadius: 1,
+    overflow: 'hidden',
+  },
+  lazyLoadingBar: {
+    height: 2,
+    width: '50%',
+    backgroundColor: COLORS.monoWhite,
+    borderRadius: 1,
+  },
+  skeletonList: {
+    paddingTop: 4,
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#1C1D22',
+    borderBottomWidth: 1,
+    borderBottomColor: '#262832',
+  },
+  skeletonAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#262832',
+    marginRight: 12,
+  },
+  skeletonBody: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  skeletonName: {
+    width: '45%',
+    height: 14,
+    borderRadius: 6,
+    backgroundColor: '#262832',
+    marginBottom: 8,
+  },
+  skeletonSub: {
+    width: '30%',
+    height: 11,
+    borderRadius: 5,
+    backgroundColor: '#23252E',
+    marginBottom: 8,
+  },
+  skeletonMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  skeletonMetaIcon: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    backgroundColor: '#23252E',
+  },
+  skeletonMetaText: {
+    width: 50,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#23252E',
+  },
+  skeletonCallBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#262832',
   },
   emptyContainer: {
     padding: 40,
