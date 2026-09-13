@@ -29,63 +29,63 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
   const showSubNumber = name.trim().length > 0 && number !== name;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.7}
-      onPress={() => onPressItem?.(item)}
-      style={styles.container}>
-      {/* Left: Contact Avatar */}
-      <Avatar name={name} number={number} size={42} style={styles.avatar} />
+    <View style={styles.container}>
+      {/* Clickable Left & Center Body: View Call Details / Disposition Modal */}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => onPressItem?.(item)}
+        style={styles.infoTouchable}>
+        {/* Contact Avatar */}
+        <Avatar name={name} number={number} size={42} style={styles.avatar} />
 
-      {/* Center: Contact Info & Call Meta */}
-      <View style={styles.infoContainer}>
-        <Text style={styles.nameText} numberOfLines={1}>
-          {displayName}
-        </Text>
-
-        {showSubNumber && (
-          <Text style={styles.subNumberText} numberOfLines={1}>
-            {number}
-          </Text>
-        )}
-
-        <View style={styles.metaRow}>
-          {/* Minimalist Arrow Icon */}
-          <Icon
-            name={isIncoming ? 'arrow-incoming' : 'arrow-outgoing'}
-            size={12}
-            color={COLORS.textTertiary}
-            style={styles.arrowIcon}
-          />
-
-          {/* Duration or Unconnected Tag */}
-          <Text style={styles.metaText}>
-            {isConnected ? formatVerboseDuration(duration) : 'Unconnected'}
+        {/* Contact Info & Meta */}
+        <View style={styles.infoContainer}>
+          <Text style={styles.nameText} numberOfLines={1}>
+            {displayName}
           </Text>
 
-          {/* Disposition badge if tagged */}
-          {item.outcomeLabel ? (
-            <Badge
-              label={item.outcomeLabel}
-              variant="outline"
-              size="sm"
-              style={styles.outcomeBadge}
+          {showSubNumber && (
+            <Text style={styles.subNumberText} numberOfLines={1}>
+              {number}
+            </Text>
+          )}
+
+          <View style={styles.metaRow}>
+            <Icon
+              name={isIncoming ? 'arrow-incoming' : 'arrow-outgoing'}
+              size={12}
+              color={COLORS.textTertiary}
+              style={styles.arrowIcon}
             />
-          ) : null}
+
+            <Text style={styles.metaText}>
+              {isConnected ? formatVerboseDuration(duration) : 'Unconnected'}
+            </Text>
+
+            {item.outcomeLabel ? (
+              <Badge
+                label={item.outcomeLabel}
+                variant="outline"
+                size="sm"
+                style={styles.outcomeBadge}
+              />
+            ) : null}
+          </View>
         </View>
-      </View>
 
-      {/* Right: Timestamp & 1-Tap Quick Dial Button */}
-      <View style={styles.actionContainer}>
+        {/* Date / Timestamp */}
         <Text style={styles.dateText}>{formatRelativeDate(date)}</Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity
-          activeOpacity={0.75}
-          onPress={() => onQuickCall(number, name)}
-          style={styles.callButton}>
-          <Icon name="call" size={16} color={COLORS.monoWhite} />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+      {/* Independent 1-Tap Quick Dial Button: Clean sibling without touch responder conflict */}
+      <TouchableOpacity
+        activeOpacity={0.65}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        onPress={() => onQuickCall(number, name)}
+        style={styles.callButton}>
+        <Icon name="call" size={16} color={COLORS.monoWhite} />
+      </TouchableOpacity>
+    </View>
   );
 };
 
@@ -99,6 +99,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#262832',
   },
+  infoTouchable: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
   avatar: {
     marginRight: 12,
     backgroundColor: '#23252E',
@@ -107,7 +113,7 @@ const styles = StyleSheet.create({
   infoContainer: {
     flex: 1,
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 8,
   },
   nameText: {
     fontSize: 15,
@@ -137,19 +143,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 1,
   },
-  actionContainer: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
   dateText: {
     fontSize: 11,
     color: '#8D919C',
-    marginBottom: 6,
+    alignSelf: 'center',
+    marginRight: 4,
   },
   callButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#262832',
     borderWidth: 1,
     borderColor: '#343744',

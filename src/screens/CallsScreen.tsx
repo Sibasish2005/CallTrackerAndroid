@@ -2,7 +2,9 @@ import React from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -63,25 +65,33 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
         <Card variant="default" style={styles.dialerCard}>
           <Text style={styles.dialerLabel}>QUICK CELLULAR DIALER</Text>
           <View style={styles.dialerInputRow}>
-            <TextInput
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              placeholder="Enter phone number..."
-              placeholderTextColor={COLORS.textTertiary}
-              keyboardType="phone-pad"
-              style={styles.phoneInput}
-            />
-            {phoneNumber.length > 0 && (
-              <TouchableOpacity
-                onPress={() => setPhoneNumber('')}
-                style={styles.clearButton}>
-                <Icon name="close" size={12} color={COLORS.textTertiary} />
-              </TouchableOpacity>
-            )}
+            <View style={styles.phoneInputWrapper}>
+              <TextInput
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                placeholder="Enter phone number..."
+                placeholderTextColor={COLORS.textTertiary}
+                keyboardType="phone-pad"
+                style={styles.phoneInput}
+              />
+              {phoneNumber.length > 0 && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  onPress={() => setPhoneNumber('')}
+                  style={styles.clearButton}>
+                  <Icon name="close" size={14} color={COLORS.textTertiary} />
+                </TouchableOpacity>
+              )}
+            </View>
 
             <TouchableOpacity
               activeOpacity={0.8}
-              onPress={() => onMakeCall()}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              onPress={() => {
+                Keyboard.dismiss();
+                onMakeCall();
+              }}
               disabled={!canDial}
               style={[styles.dialButton, !canDial && styles.dialButtonDisabled]}>
               <Icon name="call" size={14} color={COLORS.monoWhite} />
@@ -101,25 +111,29 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
             style={styles.searchInput}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={12} color={COLORS.textTertiary} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={() => setSearchQuery('')}
+              style={styles.searchClearButton}>
+              <Icon name="close" size={14} color={COLORS.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Filter Chips Horizontal Scroll */}
-        <FlatList
+        <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          data={FILTER_OPTIONS}
-          keyExtractor={item => item.id}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.filterScrollContent}
-          renderItem={({ item }) => {
+          contentContainerStyle={styles.filterScrollContent}>
+          {FILTER_OPTIONS.map(item => {
             const isSelected = selectedFilter === item.id;
             return (
               <TouchableOpacity
+                key={item.id}
                 activeOpacity={0.7}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                 onPress={() => setSelectedFilter(item.id)}
                 style={[
                   styles.filterChip,
@@ -134,15 +148,18 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
                 </Text>
               </TouchableOpacity>
             );
-          }}
-        />
+          })}
+        </ScrollView>
 
         {/* Results summary row */}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryText}>
             {filteredCalls.length} of {allCallsCount} calls
           </Text>
-          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          <TouchableOpacity
+            onPress={onRefresh}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.refreshButton}>
             <Text style={styles.refreshButtonText}>↻ Refresh</Text>
           </TouchableOpacity>
         </View>
@@ -219,21 +236,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  phoneInput: {
+  phoneInputWrapper: {
     flex: 1,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  phoneInput: {
     height: 46,
     backgroundColor: COLORS.surfaceSubtle,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 38,
     fontSize: 15,
     color: COLORS.textPrimary,
   },
   clearButton: {
     position: 'absolute',
-    right: 96,
-    padding: 8,
+    right: 8,
+    padding: 6,
+    zIndex: 10,
   },
   dialButton: {
     flexDirection: 'row',
@@ -274,6 +297,9 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 14,
     padding: 0,
+  },
+  searchClearButton: {
+    padding: 6,
   },
   filterScrollContent: {
     gap: 8,
