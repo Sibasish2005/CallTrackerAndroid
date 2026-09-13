@@ -55,103 +55,104 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
 }) => {
   const canDial = phoneNumber.trim().length > 0;
 
-  const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      {/* Quick Dialer Card */}
-      <Card variant="default" style={styles.dialerCard}>
-        <Text style={styles.dialerLabel}>QUICK CELLULAR DIALER</Text>
-        <View style={styles.dialerInputRow}>
-          <TextInput
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            placeholder="Enter phone number..."
-            placeholderTextColor={COLORS.textTertiary}
-            keyboardType="phone-pad"
-            style={styles.phoneInput}
-          />
-          {phoneNumber.length > 0 && (
+  return (
+    <View style={styles.container}>
+      {/* Fixed top section: Quick Cellular Dialer, Search, and Filter Chips */}
+      <View style={styles.headerContainer}>
+        {/* Quick Dialer Card */}
+        <Card variant="default" style={styles.dialerCard}>
+          <Text style={styles.dialerLabel}>QUICK CELLULAR DIALER</Text>
+          <View style={styles.dialerInputRow}>
+            <TextInput
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="Enter phone number..."
+              placeholderTextColor={COLORS.textTertiary}
+              keyboardType="phone-pad"
+              style={styles.phoneInput}
+            />
+            {phoneNumber.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setPhoneNumber('')}
+                style={styles.clearButton}>
+                <Icon name="close" size={12} color={COLORS.textTertiary} />
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
-              onPress={() => setPhoneNumber('')}
-              style={styles.clearButton}>
+              activeOpacity={0.8}
+              onPress={() => onMakeCall()}
+              disabled={!canDial}
+              style={[styles.dialButton, !canDial && styles.dialButtonDisabled]}>
+              <Icon name="call" size={14} color={COLORS.monoWhite} />
+              <Text style={styles.dialText}>Call</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
+        {/* Search Input */}
+        <View style={styles.searchBarContainer}>
+          <Icon name="search" size={14} color={COLORS.textTertiary} style={styles.searchIcon} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by name or number..."
+            placeholderTextColor={COLORS.textTertiary}
+            style={styles.searchInput}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
               <Icon name="close" size={12} color={COLORS.textTertiary} />
             </TouchableOpacity>
           )}
+        </View>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => onMakeCall()}
-            disabled={!canDial}
-            style={[styles.dialButton, !canDial && styles.dialButtonDisabled]}>
-            <Icon name="call" size={14} color={COLORS.monoWhite} />
-            <Text style={styles.dialText}>Call</Text>
+        {/* Filter Chips Horizontal Scroll */}
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={FILTER_OPTIONS}
+          keyExtractor={item => item.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.filterScrollContent}
+          renderItem={({ item }) => {
+            const isSelected = selectedFilter === item.id;
+            return (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setSelectedFilter(item.id)}
+                style={[
+                  styles.filterChip,
+                  isSelected && styles.filterChipActive,
+                ]}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isSelected && styles.filterChipTextActive,
+                  ]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+
+        {/* Results summary row */}
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryText}>
+            {filteredCalls.length} of {allCallsCount} calls
+          </Text>
+          <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+            <Text style={styles.refreshButtonText}>↻ Refresh</Text>
           </TouchableOpacity>
         </View>
-      </Card>
-
-      {/* Search Input */}
-      <View style={styles.searchBarContainer}>
-        <Icon name="search" size={14} color={COLORS.textTertiary} style={styles.searchIcon} />
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search by name or number..."
-          placeholderTextColor={COLORS.textTertiary}
-          style={styles.searchInput}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="close" size={12} color={COLORS.textTertiary} />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {/* Filter Chips Horizontal Scroll */}
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={FILTER_OPTIONS}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.filterScrollContent}
-        renderItem={({ item }) => {
-          const isSelected = selectedFilter === item.id;
-          return (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setSelectedFilter(item.id)}
-              style={[
-                styles.filterChip,
-                isSelected && styles.filterChipActive,
-              ]}>
-              <Text
-                style={[
-                  styles.filterChipText,
-                  isSelected && styles.filterChipTextActive,
-                ]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-
-      {/* Results summary row */}
-      <View style={styles.summaryRow}>
-        <Text style={styles.summaryText}>
-          {filteredCalls.length} of {allCallsCount} calls
-        </Text>
-        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
-          <Text style={styles.refreshButtonText}>↻ Refresh</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  return (
-    <View style={styles.container}>
+      {/* Calls History List */}
       <FlatList
         data={filteredCalls}
         keyExtractor={item => item.id}
-        ListHeaderComponent={renderHeader}
+        keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => (
           <CallHistoryItemRow
             item={item}
