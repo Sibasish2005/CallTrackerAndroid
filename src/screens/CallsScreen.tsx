@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   FlatList,
   Keyboard,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -200,6 +201,24 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
             onQuickCall={(num, name) => onMakeCall(num, name)}
           />
         )}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={onRefresh}
+            colors={[COLORS.monoWhite]}
+            progressBackgroundColor="#23252E"
+            tintColor={COLORS.monoWhite}
+            progressViewOffset={10}
+          />
+        }
+        ListFooterComponent={
+          isLoading && filteredCalls.length > 0 ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={COLORS.monoSilver} />
+              <Text style={styles.footerLoaderText}>Syncing records...</Text>
+            </View>
+          ) : undefined
+        }
         ListEmptyComponent={
           isLoading ? (
             <View style={styles.skeletonList}>
@@ -454,6 +473,18 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     backgroundColor: '#262832',
+  },
+  footerLoader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+  },
+  footerLoaderText: {
+    fontSize: 12,
+    color: COLORS.textTertiary,
+    fontWeight: '500',
   },
   emptyContainer: {
     padding: 40,
