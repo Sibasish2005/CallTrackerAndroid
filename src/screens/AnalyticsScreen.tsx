@@ -20,6 +20,7 @@ interface AnalyticsScreenProps {
   todayCalls: CallRecord[];
   lifetimeMetrics: EmployeeMetrics;
   allCalls: CallRecord[];
+  appCalls?: CallRecord[];
 }
 
 export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
@@ -27,6 +28,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   todayCalls,
   lifetimeMetrics,
   allCalls,
+  appCalls = [],
 }) => {
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
@@ -266,11 +268,11 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
       </Card>
 
       {/* ========================================================================= */}
-      {/* SECTION 3: LIFETIME PERFORMANCE                                          */}
+      {/* SECTION 3: LIFETIME PERFORMANCE (HEEYAKU APP CALLS ONLY)                 */}
       {/* ========================================================================= */}
       <View style={styles.sectionHeaderRow}>
         <Text style={styles.sectionTitle}>3. LIFETIME PERFORMANCE</Text>
-        <Badge label="All-Time" variant="outline" size="sm" />
+        <Badge label="App Calls Only" variant="outline" size="sm" />
       </View>
 
       <Card variant="default" style={styles.card}>

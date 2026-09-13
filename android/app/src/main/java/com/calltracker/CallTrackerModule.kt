@@ -17,6 +17,8 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
+import org.json.JSONArray
+import org.json.JSONObject
 
 class CallTrackerModule(
     reactContext: ReactApplicationContext
@@ -28,6 +30,15 @@ class CallTrackerModule(
     private var telephonyCallback: CallStateCallback? = null
 
     private var startedAt: Long? = null
+
+    // Track active call dialed through HEEYAKU app
+    private var isAppInitiatedCall: Boolean = false
+    private var appInitiatedNumber: String? = null
+
+    // SharedPreferences for persistent app call storage
+    private val prefs by lazy {
+        reactApplicationContext.getSharedPreferences("heeyaku_app_calls", android.content.Context.MODE_PRIVATE)
+    }
 
     override fun getName(): String = "CallTracker"
 
@@ -200,6 +211,10 @@ class CallTrackerModule(
         }
 
         try {
+            // Flag that this call was explicitly initiated from HEEYAKU app
+            isAppInitiatedCall = true
+            appInitiatedNumber = phoneNumber
+
             val intent = Intent(
                 Intent.ACTION_CALL,
                 Uri.fromParts("tel", phoneNumber, null)
@@ -210,6 +225,8 @@ class CallTrackerModule(
 
             promise.resolve("call_started")
         } catch (error: Exception) {
+            isAppInitiatedCall = false
+            appInitiatedNumber = null
             promise.reject(
                 "CALL_FAILED",
                 error.message,
@@ -283,6 +300,110 @@ class CallTrackerModule(
                 promise.reject("CALL_LOG_ERROR", e.message, e)
             }
         }.start()
+    }
+
+    @ReactMethod
+    fun getAppCalls(promise: Promise) {
+        Thread {
+            try {
+                val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                val jsonArray = JSONArray(jsonStr)
+                val array = Arguments.createArray()
+
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val map = Arguments.createMap().apply {
+                        putString("id", obj.optString("id"))
+                        putString("number", obj.optString("number"))
+                        putString("name", obj.optString("name"))
+                        putDouble("date", obj.optDouble("date", 0.0))
+                        putDouble("duration", obj.optDouble("duration", 0.0))
+                        putInt("type", obj.optInt("type", 2))
+                        putBoolean("connected", obj.optBoolean("connected", false))
+                        if (obj.has("outcomeId")) putString("outcomeId", obj.optString("outcomeId"))
+                        if (obj.has("outcomeLabel")) putString("outcomeLabel", obj.optString("outcomeLabel"))
+                        if (obj.has("notes")) putString("notes", obj.optString("notes"))
+                    }
+                    array.pushMap(map)
+                }
+                promise.resolve(array)
+            } catch (e: Exception) {
+                promise.reject("APP_CALLS_ERROR", e.message, e)
+            }
+        }.start()
+    }
+
+    @ReactMethod
+    fun updateAppCallOutcome(callId: String, outcomeId: String, outcomeLabel: String, notes: String?, promise: Promise) {
+        Thread {
+            try {
+                val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                val jsonArray = JSONArray(jsonStr)
+                var updated = false
+
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    if (obj.optString("id") == callId) {
+                        obj.put("outcomeId", outcomeId)
+                        obj.put("outcomeLabel", outcomeLabel)
+                        if (notes != null) obj.put("notes", notes)
+                        updated = true
+                        break
+                    }
+                }
+
+                if (updated) {
+                    prefs.edit().putString("calls_list", jsonArray.toString()).apply()
+                    promise.resolve("updated")
+                } else {
+                    // Also store in standalone outcome map
+                    val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                    val outcomeMap = JSONObject(outcomeMapStr)
+                    val item = JSONObject().apply {
+                        put("outcomeId", outcomeId)
+                        put("outcomeLabel", outcomeLabel)
+                        if (notes != null) put("notes", notes)
+                    }
+                    outcomeMap.put(callId, item)
+                    prefs.edit().putString("outcome_map", outcomeMap.toString()).apply()
+                    promise.resolve("stored_in_map")
+                }
+            } catch (e: Exception) {
+                promise.reject("OUTCOME_UPDATE_ERROR", e.message, e)
+            }
+        }.start()
+    }
+
+    private fun persistAppCallRecord(record: JSONObject) {
+        try {
+            val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+            val jsonArray = JSONArray(jsonStr)
+            
+            // Check for outcome in standalone outcome map
+            val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+            val outcomeMap = JSONObject(outcomeMapStr)
+            val callId = record.optString("id")
+            if (outcomeMap.has(callId)) {
+                val outcomeObj = outcomeMap.getJSONObject(callId)
+                record.put("outcomeId", outcomeObj.optString("outcomeId"))
+                record.put("outcomeLabel", outcomeObj.optString("outcomeLabel"))
+                if (outcomeObj.has("notes")) record.put("notes", outcomeObj.optString("notes"))
+            }
+
+            // Put new call at the beginning (most recent first)
+            val newArray = JSONArray()
+            newArray.put(record)
+            for (i in 0 until jsonArray.length()) {
+                val existing = jsonArray.getJSONObject(i)
+                if (existing.optString("id") != callId) {
+                    newArray.put(existing)
+                }
+            }
+
+            prefs.edit().putString("calls_list", newArray.toString()).apply()
+        } catch (e: Exception) {
+            android.util.Log.e("CallTracker", "Failed to persist app call: ${e.message}")
+        }
     }
 
     @ReactMethod
@@ -360,24 +481,60 @@ class CallTrackerModule(
                     }
                 }
 
+                val isAppCall = isAppInitiatedCall
+                val appNumber = appInitiatedNumber
+                // Reset flags for next call
+                isAppInitiatedCall = false
+                appInitiatedNumber = null
+
+                val finalNumber = if (number.isNotBlank()) number else (appNumber ?: "Outgoing Call")
+                val isConnected = duration > 0
+
+                // If this call was initiated from HEEYAKU, save it permanently to lifetime app storage
+                if (isAppCall) {
+                    try {
+                        val recordObj = JSONObject().apply {
+                            put("id", "${date.toLong()}_${System.currentTimeMillis()}")
+                            put("number", finalNumber)
+                            put("name", name)
+                            put("date", date)
+                            put("duration", duration.toDouble())
+                            put("type", 2)
+                            put("connected", isConnected)
+                        }
+                        persistAppCallRecord(recordObj)
+                    } catch (err: Exception) {
+                        android.util.Log.e("CallTracker", "Error auto-saving app call: ${err.message}")
+                    }
+                }
+
                 if (reactApplicationContext.hasActiveReactInstance()) {
                     val params = Arguments.createMap().apply {
                         putDouble("duration", duration.toDouble())
-                        putString("number", number)
+                        putString("number", finalNumber)
                         putString("name", name)
                         putDouble("date", date)
+                        putBoolean("isAppInitiated", isAppCall)
+                        putBoolean("connected", isConnected)
                     }
                     reactApplicationContext
                         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                         .emit("CallEnded", params)
                 }
             } catch (e: Exception) {
+                val isAppCall = isAppInitiatedCall
+                val appNumber = appInitiatedNumber
+                isAppInitiatedCall = false
+                appInitiatedNumber = null
+
                 if (reactApplicationContext.hasActiveReactInstance()) {
                     val params = Arguments.createMap().apply {
                         putDouble("duration", fallbackDuration.toDouble())
-                        putString("number", "")
+                        putString("number", appNumber ?: "")
                         putString("name", "")
                         putDouble("date", System.currentTimeMillis().toDouble())
+                        putBoolean("isAppInitiated", isAppCall)
+                        putBoolean("connected", fallbackDuration > 0)
                     }
                     reactApplicationContext
                         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)

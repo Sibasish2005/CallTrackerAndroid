@@ -18,6 +18,7 @@ interface AppNavigatorProps {
   todayCalls: CallRecord[];
   lifetimeMetrics: EmployeeMetrics;
   allCalls: CallRecord[];
+  appCalls?: CallRecord[];
   filteredCalls: CallRecord[];
   allCallsCount: number;
   isLoadingHistory: boolean;
@@ -45,6 +46,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
   todayCalls,
   lifetimeMetrics,
   allCalls,
+  appCalls = [],
   filteredCalls,
   allCallsCount,
   isLoadingHistory,
@@ -106,6 +108,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             todayCalls={todayCalls}
             lifetimeMetrics={lifetimeMetrics}
             allCalls={allCalls}
+            appCalls={appCalls}
           />
         )}
 

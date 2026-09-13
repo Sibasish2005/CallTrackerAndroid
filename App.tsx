@@ -15,9 +15,10 @@ function MainApp() {
   const insets = useSafeAreaInsets();
   const tracker = useCallTracker();
 
-  // Authoritative metrics: today-only separated from lifetime
+  // Authoritative metrics: today-only separated from lifetime (lifetime computed strictly from appCalls)
   const { todayCalls, todayMetrics, lifetimeMetrics } = useCallMetrics(
-    tracker.callHistory
+    tracker.callHistory,
+    tracker.appCalls
   );
 
   // Manual or automatic outcome disposition target
@@ -46,6 +47,7 @@ function MainApp() {
         todayCalls={todayCalls}
         lifetimeMetrics={lifetimeMetrics}
         allCalls={tracker.callHistory}
+        appCalls={tracker.appCalls}
         filteredCalls={tracker.filteredHistory}
         allCallsCount={tracker.callHistory.length}
         isLoadingHistory={tracker.isLoadingHistory}

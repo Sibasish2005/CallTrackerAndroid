@@ -17,6 +17,7 @@ export function useCallTracker() {
   const [currentDuration, setCurrentDuration] = useState(0);
   const [lastCall, setLastCall] = useState<CallRecord | null>(null);
   const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
+  const [appCalls, setAppCalls] = useState<CallRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Initializing...');
   const [permissionGranted, setPermissionGranted] = useState(false);
@@ -34,6 +35,47 @@ export function useCallTracker() {
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeNumberRef = useRef<string>('');
   const reachedOffhookRef = useRef<boolean>(false);
+  const lastDialedNumberRef = useRef<string>('');
+
+  // Fetch HEEYAKU app-initiated call history from native storage (unlimited lifetime calls)
+  const loadAppCalls = useCallback(async () => {
+    try {
+      if (CallTracker?.getAppCalls) {
+        const rawAppCalls: any[] = await CallTracker.getAppCalls();
+        if (Array.isArray(rawAppCalls)) {
+          const mapped: CallRecord[] = rawAppCalls.map((item, index) => {
+            const id = String(item.id || `app_${item.date || Date.now()}_${index}`);
+            const durationSecs = Number(item.duration) || 0;
+            const isConnected = item.connected === true || durationSecs > 0;
+            return {
+              id,
+              employeeId: 'EMP-1082',
+              phoneNumber: item.number || 'Unknown',
+              contactName: item.name || '',
+              callType: 'OUTGOING',
+              startedAt: Number(item.date) || Date.now(),
+              endedAt: Number(item.date) + durationSecs * 1000,
+              durationSeconds: durationSecs,
+              connected: isConnected,
+              outcomeId: item.outcomeId,
+              outcomeLabel: item.outcomeLabel,
+              notes: item.notes,
+              createdAt: Number(item.date) || Date.now(),
+              number: item.number || 'Unknown',
+              name: item.name || '',
+              duration: durationSecs,
+              date: Number(item.date) || Date.now(),
+              type: 2,
+              isAppInitiated: true,
+            };
+          });
+          setAppCalls(mapped);
+        }
+      }
+    } catch (err: any) {
+      console.log('Error loading app calls:', err?.message);
+    }
+  }, []);
 
   // Fetch call history from native CallLog (up to 200 records)
   const loadCallHistory = useCallback(async (showIndicator = false) => {
@@ -41,6 +83,7 @@ export function useCallTracker() {
       if (showIndicator) {
         setIsLoadingHistory(true);
       }
+      loadAppCalls();
       if (CallTracker?.getCallHistory) {
         const rawHistory: any[] = await CallTracker.getCallHistory(200);
         if (Array.isArray(rawHistory)) {
@@ -317,6 +360,29 @@ export function useCallTracker() {
       notes,
     };
 
+    // Update in native app persistent storage
+    try {
+      if (CallTracker?.updateAppCallOutcome) {
+        CallTracker.updateAppCallOutcome(callId, outcomeId, outcomeLabel, notes || null);
+      }
+    } catch (e) {
+      console.log('Error persisting outcome to native storage:', e);
+    }
+
+    setAppCalls(prev =>
+      prev.map(item => {
+        if (item.id === callId) {
+          return {
+            ...item,
+            outcomeId,
+            outcomeLabel,
+            notes,
+          };
+        }
+        return item;
+      }),
+    );
+
     setCallHistory(prev =>
       prev.map(item => {
         if (item.id === callId) {
@@ -385,6 +451,7 @@ export function useCallTracker() {
     currentDuration,
     lastCall,
     callHistory,
+    appCalls,
     isLoadingHistory,
     statusMessage,
     permissionGranted,
@@ -400,6 +467,7 @@ export function useCallTracker() {
     saveCallOutcome,
     dismissOutcomeModal,
     loadCallHistory,
+    loadAppCalls,
     requestPermissions,
     startCallListener,
     makeCall,

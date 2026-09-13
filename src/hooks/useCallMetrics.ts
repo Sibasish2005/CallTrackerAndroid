@@ -66,7 +66,10 @@ export interface CallMetricsResult {
   calculatePeriodMetrics: (calls: CallRecord[]) => EmployeeMetrics;
 }
 
-export function useCallMetrics(allCalls: CallRecord[]): CallMetricsResult {
+export function useCallMetrics(
+  allCalls: CallRecord[],
+  appOnlyCalls?: CallRecord[]
+): CallMetricsResult {
   return useMemo(() => {
     // 1. Filter strictly for local calendar day (Today 00:00 -> now)
     const todayCalls = (allCalls || []).filter(call => {
@@ -77,8 +80,14 @@ export function useCallMetrics(allCalls: CallRecord[]): CallMetricsResult {
     // 2. Today-only metrics (for Dashboard and Daily Analytics)
     const todayMetrics = calculateMetrics(todayCalls);
 
-    // 3. Lifetime metrics (strictly for Lifetime Analytics)
-    const lifetimeMetrics = calculateMetrics(allCalls || []);
+    // 3. Lifetime metrics: Strictly calculated from calls initiated within HEEYAKU app
+    // If appOnlyCalls is provided, use it directly (unlimited, app-only history)
+    // Otherwise fallback to filtering allCalls by isAppInitiated
+    const lifetimeSource = appOnlyCalls !== undefined
+      ? appOnlyCalls
+      : (allCalls || []).filter(c => c.isAppInitiated === true);
+
+    const lifetimeMetrics = calculateMetrics(lifetimeSource);
 
     return {
       todayCalls,
@@ -86,5 +95,5 @@ export function useCallMetrics(allCalls: CallRecord[]): CallMetricsResult {
       lifetimeMetrics,
       calculatePeriodMetrics: calculateMetrics,
     };
-  }, [allCalls]);
+  }, [allCalls, appOnlyCalls]);
 }

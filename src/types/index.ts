@@ -28,6 +28,7 @@ export interface CallRecord {
   notes?: string;            // Employee disposition notes
   createdAt: number;
   synced?: boolean;
+  isAppInitiated?: boolean; // True strictly if call was dialed from HEEYAKU app
 
   // Compatibility aliases for CallLog items
   number?: string;
