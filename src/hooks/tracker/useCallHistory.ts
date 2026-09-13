@@ -32,6 +32,10 @@ export function useCallHistory(
             const id = String(item.id || `app_${item.date || Date.now()}_${index}`);
             const durationSecs = Number(item.duration) || 0;
             const isConnected = item.connected === true || durationSecs > 0;
+            const savedOutcome = getOutcomeForCall?.(id);
+            const outcomeId = item.outcomeId || savedOutcome?.outcomeId;
+            const outcomeLabel = item.outcomeLabel || savedOutcome?.outcomeLabel;
+            const notes = item.notes || savedOutcome?.notes;
             return {
               id,
               employeeId: 'EMP-1082',
@@ -42,9 +46,9 @@ export function useCallHistory(
               endedAt: Number(item.date) + durationSecs * 1000,
               durationSeconds: durationSecs,
               connected: isConnected,
-              outcomeId: item.outcomeId,
-              outcomeLabel: item.outcomeLabel,
-              notes: item.notes,
+              outcomeId,
+              outcomeLabel,
+              notes,
               createdAt: Number(item.date) || Date.now(),
               number: item.number || 'Unknown',
               name: item.name || '',

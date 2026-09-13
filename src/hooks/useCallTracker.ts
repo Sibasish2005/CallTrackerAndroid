@@ -70,10 +70,20 @@ export function useCallTracker() {
   // 5. Telephony state, dialing & events
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
   onCallEndedEventRef.current = (completedRecord: CallRecord) => {
+    // 1. Immediately update callHistory
     setCallHistory(prev => {
       const filtered = prev.filter(c => c.id !== completedRecord.id);
       return [completedRecord, ...filtered.slice(0, 199)];
     });
+
+    // 2. CRITICAL: Immediately update appCalls as well so todayMetrics, lifetimeMetrics
+    // and all dashboard KPIs immediately reflect this new call!
+    setAppCalls(prev => {
+      const filtered = prev.filter(c => c.id !== completedRecord.id);
+      return [completedRecord, ...filtered];
+    });
+
+    // 3. Set the popup modal target
     setPendingOutcomeCall(completedRecord);
   };
   const handleCallEndedEvent = useCallback((completedRecord: CallRecord) => {
@@ -120,28 +130,69 @@ export function useCallTracker() {
   const saveCallOutcome = useCallback(
     (callId: string, outcomeId: string, notes?: string) => {
       saveOutcomeBase(callId, outcomeId, notes, (_id, outcomeLabel, finalNotes) => {
-        setAppCalls(prev =>
-          prev.map(item =>
-            item.id === callId
-              ? { ...item, outcomeId, outcomeLabel, notes: finalNotes }
-              : item
-          )
-        );
-        setCallHistory(prev =>
-          prev.map(item =>
-            item.id === callId
-              ? { ...item, outcomeId, outcomeLabel, notes: finalNotes }
-              : item
-          )
-        );
+        // 1. Update appCalls immediately with outcome disposition
+        setAppCalls(prev => {
+          let matched = false;
+          const updated = prev.map(item => {
+            const isTarget =
+              item.id === callId ||
+              (pendingOutcomeCall && item.id === pendingOutcomeCall.id);
+            if (isTarget) {
+              matched = true;
+              return { ...item, outcomeId, outcomeLabel, notes: finalNotes };
+            }
+            return item;
+          });
+
+          // Fallback: If exact ID didn't match, update most recent call in appCalls
+          if (!matched && prev.length > 0) {
+            return [
+              { ...prev[0], outcomeId, outcomeLabel, notes: finalNotes },
+              ...prev.slice(1),
+            ];
+          }
+          if (!matched && pendingOutcomeCall) {
+            return [
+              { ...pendingOutcomeCall, outcomeId, outcomeLabel, notes: finalNotes },
+            ];
+          }
+          return updated;
+        });
+
+        // 2. Update callHistory
+        setCallHistory(prev => {
+          let matched = false;
+          const updated = prev.map(item => {
+            const isTarget =
+              item.id === callId ||
+              (pendingOutcomeCall && item.id === pendingOutcomeCall.id);
+            if (isTarget) {
+              matched = true;
+              return { ...item, outcomeId, outcomeLabel, notes: finalNotes };
+            }
+            return item;
+          });
+          if (!matched && prev.length > 0) {
+            return [
+              { ...prev[0], outcomeId, outcomeLabel, notes: finalNotes },
+              ...prev.slice(1),
+            ];
+          }
+          return updated;
+        });
+
+        // 3. Update lastCall
         setLastCall(prev =>
-          prev?.id === callId
-            ? { ...prev, outcomeId, outcomeLabel, notes: finalNotes }
-            : prev
+          prev ? { ...prev, outcomeId, outcomeLabel, notes: finalNotes } : null
         );
+
+        // 4. Resync app calls from native storage after short delay for persistence consistency
+        setTimeout(() => {
+          loadAppCalls();
+        }, 300);
       });
     },
-    [saveOutcomeBase, setAppCalls, setCallHistory, setLastCall]
+    [loadAppCalls, pendingOutcomeCall, saveOutcomeBase, setAppCalls, setCallHistory, setLastCall]
   );
 
   // Initial mount: check permissions and start listener (runs strictly ONCE)

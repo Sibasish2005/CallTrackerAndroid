@@ -325,21 +325,37 @@ class CallTrackerModule(
                 try {
                     val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
                     val jsonArray = JSONArray(jsonStr)
+                    val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                    val outcomeMap = JSONObject(outcomeMapStr)
                     val array = Arguments.createArray()
 
                     for (i in 0 until jsonArray.length()) {
                         val obj = jsonArray.getJSONObject(i)
+                        val id = obj.optString("id")
+
+                        var outcomeId = if (obj.has("outcomeId")) obj.optString("outcomeId") else null
+                        var outcomeLabel = if (obj.has("outcomeLabel")) obj.optString("outcomeLabel") else null
+                        var notes = if (obj.has("notes")) obj.optString("notes") else null
+
+                        // If not on object, check outcome_map
+                        if (outcomeId.isNullOrBlank() && outcomeMap.has(id)) {
+                            val mapObj = outcomeMap.getJSONObject(id)
+                            outcomeId = mapObj.optString("outcomeId")
+                            outcomeLabel = mapObj.optString("outcomeLabel")
+                            if (mapObj.has("notes")) notes = mapObj.optString("notes")
+                        }
+
                         val map = Arguments.createMap().apply {
-                            putString("id", obj.optString("id"))
+                            putString("id", id)
                             putString("number", obj.optString("number"))
                             putString("name", obj.optString("name"))
                             putDouble("date", obj.optDouble("date", 0.0))
                             putDouble("duration", obj.optDouble("duration", 0.0))
                             putInt("type", obj.optInt("type", 2))
                             putBoolean("connected", obj.optBoolean("connected", false))
-                            if (obj.has("outcomeId")) putString("outcomeId", obj.optString("outcomeId"))
-                            if (obj.has("outcomeLabel")) putString("outcomeLabel", obj.optString("outcomeLabel"))
-                            if (obj.has("notes")) putString("notes", obj.optString("notes"))
+                            if (!outcomeId.isNullOrBlank()) putString("outcomeId", outcomeId)
+                            if (!outcomeLabel.isNullOrBlank()) putString("outcomeLabel", outcomeLabel)
+                            if (!notes.isNullOrBlank()) putString("notes", notes)
                         }
                         array.pushMap(map)
                     }
@@ -371,22 +387,31 @@ class CallTrackerModule(
                         }
                     }
 
+                    // Fallback: If ID didn't match directly, update the most recent call record in calls_list
+                    if (!updated && jsonArray.length() > 0) {
+                        val latestObj = jsonArray.getJSONObject(0)
+                        latestObj.put("outcomeId", outcomeId)
+                        latestObj.put("outcomeLabel", outcomeLabel)
+                        if (notes != null) latestObj.put("notes", notes)
+                        updated = true
+                    }
+
                     if (updated) {
                         prefs.edit().putString("calls_list", jsonArray.toString()).apply()
-                        promise.resolve("updated")
-                    } else {
-                        // Also store in standalone outcome map
-                        val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
-                        val outcomeMap = JSONObject(outcomeMapStr)
-                        val item = JSONObject().apply {
-                            put("outcomeId", outcomeId)
-                            put("outcomeLabel", outcomeLabel)
-                            if (notes != null) put("notes", notes)
-                        }
-                        outcomeMap.put(callId, item)
-                        prefs.edit().putString("outcome_map", outcomeMap.toString()).apply()
-                        promise.resolve("stored_in_map")
                     }
+
+                    // Also store in standalone outcome map by callId
+                    val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                    val outcomeMap = JSONObject(outcomeMapStr)
+                    val item = JSONObject().apply {
+                        put("outcomeId", outcomeId)
+                        put("outcomeLabel", outcomeLabel)
+                        if (notes != null) put("notes", notes)
+                    }
+                    outcomeMap.put(callId, item)
+                    prefs.edit().putString("outcome_map", outcomeMap.toString()).apply()
+
+                    promise.resolve("updated")
                 } catch (e: Exception) {
                     promise.reject("OUTCOME_UPDATE_ERROR", e.message, e)
                 }
@@ -517,11 +542,13 @@ class CallTrackerModule(
                 val finalNumber = if (number.isNotBlank()) number else (appNumber ?: "Outgoing Call")
                 val isConnected = duration > 0
 
+                val generatedCallId = "${date.toLong()}_${System.currentTimeMillis()}"
+
                 // If this call was initiated from HEEYAKU, save it permanently to lifetime app storage
                 if (isAppCall) {
                     try {
                         val recordObj = JSONObject().apply {
-                            put("id", "${date.toLong()}_${System.currentTimeMillis()}")
+                            put("id", generatedCallId)
                             put("number", finalNumber)
                             put("name", name)
                             put("date", date)
@@ -537,6 +564,7 @@ class CallTrackerModule(
 
                 if (reactApplicationContext.hasActiveReactInstance()) {
                     val params = Arguments.createMap().apply {
+                        putString("id", generatedCallId)
                         putDouble("duration", duration.toDouble())
                         putString("number", finalNumber)
                         putString("name", name)
@@ -553,9 +581,11 @@ class CallTrackerModule(
                 val appNumber = appInitiatedNumber
                 isAppInitiatedCall = false
                 appInitiatedNumber = null
+                val fallbackId = "${System.currentTimeMillis()}_fallback"
 
                 if (reactApplicationContext.hasActiveReactInstance()) {
                     val params = Arguments.createMap().apply {
+                        putString("id", fallbackId)
                         putDouble("duration", fallbackDuration.toDouble())
                         putString("number", appNumber ?: "")
                         putString("name", "")
