@@ -13,7 +13,7 @@ interface CallHistoryItemRowProps {
   onQuickCall: (phoneNumber: string, contactName?: string) => void;
 }
 
-export const CallHistoryItemRow: React.FC<CallHistoryItemRowProps> = ({
+const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
   item,
   onPressItem,
   onQuickCall,
@@ -157,3 +157,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
+export const CallHistoryItemRow = React.memo(CallHistoryItemRowComponent);

@@ -153,6 +153,10 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
         data={filteredCalls}
         keyExtractor={item => item.id}
         keyboardShouldPersistTaps="handled"
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={true}
         renderItem={({ item }) => (
           <CallHistoryItemRow
             item={item}

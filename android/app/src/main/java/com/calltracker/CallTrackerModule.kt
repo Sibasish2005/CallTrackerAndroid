@@ -19,6 +19,8 @@ import com.facebook.react.modules.core.PermissionAwareActivity
 import com.facebook.react.modules.core.PermissionListener
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class CallTrackerModule(
     reactContext: ReactApplicationContext
@@ -27,13 +29,21 @@ class CallTrackerModule(
     private val telephonyManager: TelephonyManager? =
         reactContext.getSystemService(TelephonyManager::class.java)
 
+    @Volatile
     private var telephonyCallback: CallStateCallback? = null
 
+    @Volatile
     private var startedAt: Long? = null
 
-    // Track active call dialed through HEEYAKU app
+    // Track active call dialed through HEEYAKU app with volatile memory visibility
+    @Volatile
     private var isAppInitiatedCall: Boolean = false
+    @Volatile
     private var appInitiatedNumber: String? = null
+
+    // Dedicated single-thread executor to eliminate unpooled thread churn
+    private val bgExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val storageLock = Any()
 
     // SharedPreferences for persistent app call storage
     private val prefs by lazy {
@@ -210,14 +220,20 @@ class CallTrackerModule(
             }
         }
 
+        val sanitized = phoneNumber.replace(Regex("[^0-9+*#,;]"), "")
+        if (sanitized.isBlank() || sanitized.length > 32) {
+            promise.reject("INVALID_NUMBER", "Phone number is invalid or exceeds safe length")
+            return
+        }
+
         try {
             // Flag that this call was explicitly initiated from HEEYAKU app
             isAppInitiatedCall = true
-            appInitiatedNumber = phoneNumber
+            appInitiatedNumber = sanitized
 
             val intent = Intent(
                 Intent.ACTION_CALL,
-                Uri.fromParts("tel", phoneNumber, null)
+                Uri.fromParts("tel", sanitized, null)
             )
 
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -250,7 +266,7 @@ class CallTrackerModule(
             return
         }
 
-        Thread {
+        bgExecutor.execute {
             try {
                 val array = Arguments.createArray()
                 val projection = arrayOf(
@@ -299,110 +315,116 @@ class CallTrackerModule(
             } catch (e: Exception) {
                 promise.reject("CALL_LOG_ERROR", e.message, e)
             }
-        }.start()
+        }
     }
 
     @ReactMethod
     fun getAppCalls(promise: Promise) {
-        Thread {
-            try {
-                val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
-                val jsonArray = JSONArray(jsonStr)
-                val array = Arguments.createArray()
+        bgExecutor.execute {
+            synchronized(storageLock) {
+                try {
+                    val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                    val jsonArray = JSONArray(jsonStr)
+                    val array = Arguments.createArray()
 
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    val map = Arguments.createMap().apply {
-                        putString("id", obj.optString("id"))
-                        putString("number", obj.optString("number"))
-                        putString("name", obj.optString("name"))
-                        putDouble("date", obj.optDouble("date", 0.0))
-                        putDouble("duration", obj.optDouble("duration", 0.0))
-                        putInt("type", obj.optInt("type", 2))
-                        putBoolean("connected", obj.optBoolean("connected", false))
-                        if (obj.has("outcomeId")) putString("outcomeId", obj.optString("outcomeId"))
-                        if (obj.has("outcomeLabel")) putString("outcomeLabel", obj.optString("outcomeLabel"))
-                        if (obj.has("notes")) putString("notes", obj.optString("notes"))
+                    for (i in 0 until jsonArray.length()) {
+                        val obj = jsonArray.getJSONObject(i)
+                        val map = Arguments.createMap().apply {
+                            putString("id", obj.optString("id"))
+                            putString("number", obj.optString("number"))
+                            putString("name", obj.optString("name"))
+                            putDouble("date", obj.optDouble("date", 0.0))
+                            putDouble("duration", obj.optDouble("duration", 0.0))
+                            putInt("type", obj.optInt("type", 2))
+                            putBoolean("connected", obj.optBoolean("connected", false))
+                            if (obj.has("outcomeId")) putString("outcomeId", obj.optString("outcomeId"))
+                            if (obj.has("outcomeLabel")) putString("outcomeLabel", obj.optString("outcomeLabel"))
+                            if (obj.has("notes")) putString("notes", obj.optString("notes"))
+                        }
+                        array.pushMap(map)
                     }
-                    array.pushMap(map)
+                    promise.resolve(array)
+                } catch (e: Exception) {
+                    promise.reject("APP_CALLS_ERROR", e.message, e)
                 }
-                promise.resolve(array)
-            } catch (e: Exception) {
-                promise.reject("APP_CALLS_ERROR", e.message, e)
             }
-        }.start()
+        }
     }
 
     @ReactMethod
     fun updateAppCallOutcome(callId: String, outcomeId: String, outcomeLabel: String, notes: String?, promise: Promise) {
-        Thread {
-            try {
-                val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
-                val jsonArray = JSONArray(jsonStr)
-                var updated = false
+        bgExecutor.execute {
+            synchronized(storageLock) {
+                try {
+                    val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                    val jsonArray = JSONArray(jsonStr)
+                    var updated = false
 
-                for (i in 0 until jsonArray.length()) {
-                    val obj = jsonArray.getJSONObject(i)
-                    if (obj.optString("id") == callId) {
-                        obj.put("outcomeId", outcomeId)
-                        obj.put("outcomeLabel", outcomeLabel)
-                        if (notes != null) obj.put("notes", notes)
-                        updated = true
-                        break
+                    for (i in 0 until jsonArray.length()) {
+                        val obj = jsonArray.getJSONObject(i)
+                        if (obj.optString("id") == callId) {
+                            obj.put("outcomeId", outcomeId)
+                            obj.put("outcomeLabel", outcomeLabel)
+                            if (notes != null) obj.put("notes", notes)
+                            updated = true
+                            break
+                        }
                     }
-                }
 
-                if (updated) {
-                    prefs.edit().putString("calls_list", jsonArray.toString()).apply()
-                    promise.resolve("updated")
-                } else {
-                    // Also store in standalone outcome map
-                    val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
-                    val outcomeMap = JSONObject(outcomeMapStr)
-                    val item = JSONObject().apply {
-                        put("outcomeId", outcomeId)
-                        put("outcomeLabel", outcomeLabel)
-                        if (notes != null) put("notes", notes)
+                    if (updated) {
+                        prefs.edit().putString("calls_list", jsonArray.toString()).apply()
+                        promise.resolve("updated")
+                    } else {
+                        // Also store in standalone outcome map
+                        val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                        val outcomeMap = JSONObject(outcomeMapStr)
+                        val item = JSONObject().apply {
+                            put("outcomeId", outcomeId)
+                            put("outcomeLabel", outcomeLabel)
+                            if (notes != null) put("notes", notes)
+                        }
+                        outcomeMap.put(callId, item)
+                        prefs.edit().putString("outcome_map", outcomeMap.toString()).apply()
+                        promise.resolve("stored_in_map")
                     }
-                    outcomeMap.put(callId, item)
-                    prefs.edit().putString("outcome_map", outcomeMap.toString()).apply()
-                    promise.resolve("stored_in_map")
+                } catch (e: Exception) {
+                    promise.reject("OUTCOME_UPDATE_ERROR", e.message, e)
                 }
-            } catch (e: Exception) {
-                promise.reject("OUTCOME_UPDATE_ERROR", e.message, e)
             }
-        }.start()
+        }
     }
 
     private fun persistAppCallRecord(record: JSONObject) {
-        try {
-            val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
-            val jsonArray = JSONArray(jsonStr)
-            
-            // Check for outcome in standalone outcome map
-            val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
-            val outcomeMap = JSONObject(outcomeMapStr)
-            val callId = record.optString("id")
-            if (outcomeMap.has(callId)) {
-                val outcomeObj = outcomeMap.getJSONObject(callId)
-                record.put("outcomeId", outcomeObj.optString("outcomeId"))
-                record.put("outcomeLabel", outcomeObj.optString("outcomeLabel"))
-                if (outcomeObj.has("notes")) record.put("notes", outcomeObj.optString("notes"))
-            }
-
-            // Put new call at the beginning (most recent first)
-            val newArray = JSONArray()
-            newArray.put(record)
-            for (i in 0 until jsonArray.length()) {
-                val existing = jsonArray.getJSONObject(i)
-                if (existing.optString("id") != callId) {
-                    newArray.put(existing)
+        synchronized(storageLock) {
+            try {
+                val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                val jsonArray = JSONArray(jsonStr)
+                
+                // Check for outcome in standalone outcome map
+                val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                val outcomeMap = JSONObject(outcomeMapStr)
+                val callId = record.optString("id")
+                if (outcomeMap.has(callId)) {
+                    val outcomeObj = outcomeMap.getJSONObject(callId)
+                    record.put("outcomeId", outcomeObj.optString("outcomeId"))
+                    record.put("outcomeLabel", outcomeObj.optString("outcomeLabel"))
+                    if (outcomeObj.has("notes")) record.put("notes", outcomeObj.optString("notes"))
                 }
-            }
 
-            prefs.edit().putString("calls_list", newArray.toString()).apply()
-        } catch (e: Exception) {
-            android.util.Log.e("CallTracker", "Failed to persist app call: ${e.message}")
+                // Put new call at the beginning (most recent first)
+                val newArray = JSONArray()
+                newArray.put(record)
+                for (i in 0 until jsonArray.length()) {
+                    val existing = jsonArray.getJSONObject(i)
+                    if (existing.optString("id") != callId) {
+                        newArray.put(existing)
+                    }
+                }
+
+                prefs.edit().putString("calls_list", newArray.toString()).apply()
+            } catch (e: Exception) {
+                android.util.Log.e("CallTracker", "Failed to persist app call: ${e.message}")
+            }
         }
     }
 
@@ -422,6 +444,11 @@ class CallTrackerModule(
             telephonyManager?.unregisterTelephonyCallback(it)
             telephonyCallback = null
         }
+        try {
+            bgExecutor.shutdown()
+        } catch (e: Exception) {
+            // Ignore
+        }
     }
 
     private fun sendCallState(state: String) {
@@ -435,7 +462,7 @@ class CallTrackerModule(
     }
 
     private fun fetchLatestCallLogAndEmit(fallbackDuration: Long) {
-        Thread {
+        bgExecutor.execute {
             try {
                 // Allow Android system time to commit the completed call to CallLog ContentProvider
                 Thread.sleep(700)
@@ -541,7 +568,7 @@ class CallTrackerModule(
                         .emit("CallEnded", params)
                 }
             }
-        }.start()
+        }
     }
 
     private inner class CallStateCallback :
