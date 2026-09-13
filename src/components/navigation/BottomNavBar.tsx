@@ -20,6 +20,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         {/* Tab 1: Calls (Call history and calling) */}
         <TouchableOpacity
           activeOpacity={0.7}
+          delayPressIn={0}
           onPress={() => onSelectTab('calls')}
           style={styles.tabItem}>
           <Icon
@@ -40,6 +41,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         {/* Tab 2: HEEYAKU (Home / Main daily dashboard) */}
         <TouchableOpacity
           activeOpacity={0.7}
+          delayPressIn={0}
           onPress={() => onSelectTab('dashboard')}
           style={styles.tabItem}>
           <View
@@ -62,6 +64,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         {/* Tab 3: Analytics (Performance information) */}
         <TouchableOpacity
           activeOpacity={0.7}
+          delayPressIn={0}
           onPress={() => onSelectTab('analytics')}
           style={styles.tabItem}>
           <Icon
@@ -82,6 +85,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         {/* Tab 4: Profile (Simple employee profile/settings) */}
         <TouchableOpacity
           activeOpacity={0.7}
+          delayPressIn={0}
           onPress={() => onSelectTab('profile')}
           style={styles.tabItem}>
           <Icon

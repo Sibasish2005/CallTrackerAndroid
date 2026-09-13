@@ -1,5 +1,6 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import { CallRecord } from '../types';
 import {
   useCallFilter,
   useCallHistory,
@@ -39,6 +40,11 @@ export function useCallTracker() {
   } = useCallOutcomes();
 
   // 3. Call History & Native App Calls
+  const onLatestCallFoundRef = useRef<((call: CallRecord) => void) | undefined>(undefined);
+  const handleLatestCallFound = useCallback((call: CallRecord) => {
+    onLatestCallFoundRef.current?.(call);
+  }, []);
+
   const {
     callHistory,
     setCallHistory,
@@ -47,9 +53,10 @@ export function useCallTracker() {
     isLoadingHistory,
     loadAppCalls,
     loadCallHistory,
-  } = useCallHistory(getOutcomeForCall, latest => {
-    setLastCall(prev => prev ?? latest);
-  });
+  } = useCallHistory(getOutcomeForCall, handleLatestCallFound);
+
+  const loadCallHistoryRef = useRef(loadCallHistory);
+  loadCallHistoryRef.current = loadCallHistory;
 
   // 4. Filtering & Search (strictly on appCalls as per Option A)
   const {
@@ -61,6 +68,22 @@ export function useCallTracker() {
   } = useCallFilter(appCalls);
 
   // 5. Telephony state, dialing & events
+  const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
+  onCallEndedEventRef.current = (completedRecord: CallRecord) => {
+    setCallHistory(prev => {
+      const filtered = prev.filter(c => c.id !== completedRecord.id);
+      return [completedRecord, ...filtered.slice(0, 199)];
+    });
+    setPendingOutcomeCall(completedRecord);
+  };
+  const handleCallEndedEvent = useCallback((completedRecord: CallRecord) => {
+    onCallEndedEventRef.current(completedRecord);
+  }, []);
+
+  const handleCallEndedReloadHistory = useCallback(() => {
+    loadCallHistoryRef.current(false);
+  }, []);
+
   const {
     callState,
     isCallActive,
@@ -75,28 +98,23 @@ export function useCallTracker() {
     startCallListener,
     makeCall,
   } = useTelephonyState({
-    onCallEndedEvent: completedRecord => {
-      // Add completed record to history
-      setCallHistory(prev => {
-        const filtered = prev.filter(c => c.id !== completedRecord.id);
-        return [completedRecord, ...filtered.slice(0, 199)];
-      });
-      // Show outcome modal
-      setPendingOutcomeCall(completedRecord);
-    },
-    onCallEndedReloadHistory: () => {
-      loadCallHistory(false);
-    },
+    onCallEndedEvent: handleCallEndedEvent,
+    onCallEndedReloadHistory: handleCallEndedReloadHistory,
     onStatusMessage: setStatusMessage,
   });
+
+  // Attach setLastCall to onLatestCallFoundRef
+  onLatestCallFoundRef.current = (latest: CallRecord) => {
+    setLastCall(prev => prev ?? latest);
+  };
 
   // Request permissions wrapper: automatically starts listener and loads history on grant
   const requestPermissions = useCallback(async () => {
     return requestPermsBase(() => {
       startCallListener();
-      loadCallHistory(true);
+      loadCallHistoryRef.current(true);
     });
-  }, [requestPermsBase, startCallListener, loadCallHistory]);
+  }, [requestPermsBase, startCallListener]);
 
   // Save call outcome handler: updates outcome in appCalls, callHistory, and lastCall
   const saveCallOutcome = useCallback(
@@ -126,14 +144,18 @@ export function useCallTracker() {
     [saveOutcomeBase, setAppCalls, setCallHistory, setLastCall]
   );
 
-  // Initial mount: check permissions and start listener
+  // Initial mount: check permissions and start listener (runs strictly ONCE)
+  const isInitializedRef = useRef(false);
   useEffect(() => {
+    if (isInitializedRef.current) return;
+    isInitializedRef.current = true;
+
     const init = async () => {
       try {
         const status = await checkPermissions();
         if (status === 'granted') {
           await startCallListener();
-          await loadCallHistory(true);
+          await loadCallHistoryRef.current(true);
           setStatusMessage('System active & tracking');
         } else {
           await requestPermissions();
@@ -144,7 +166,8 @@ export function useCallTracker() {
     };
 
     init();
-  }, [checkPermissions, loadCallHistory, requestPermissions, setStatusMessage, startCallListener]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Monitor AppState: Re-sync call history on return
   useEffect(() => {
@@ -153,7 +176,7 @@ export function useCallTracker() {
       (nextState: AppStateStatus) => {
         if (nextState === 'active') {
           console.log('App resumed, syncing latest call history...');
-          loadCallHistory(false);
+          loadCallHistoryRef.current(false);
         }
       }
     );
@@ -161,7 +184,7 @@ export function useCallTracker() {
     return () => {
       subscription.remove();
     };
-  }, [loadCallHistory]);
+  }, []);
 
   return {
     callState,

@@ -33,6 +33,7 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
       {/* Clickable Left & Center Body: View Call Details / Disposition Modal */}
       <TouchableOpacity
         activeOpacity={0.7}
+        delayPressIn={0}
         onPress={() => onPressItem?.(item)}
         style={styles.infoTouchable}>
         {/* Contact Avatar */}
@@ -80,6 +81,7 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
       {/* Independent 1-Tap Quick Dial Button: Clean sibling without touch responder conflict */}
       <TouchableOpacity
         activeOpacity={0.65}
+        delayPressIn={0}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         onPress={() => onQuickCall(number, name)}
         style={styles.callButton}>

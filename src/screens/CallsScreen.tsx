@@ -77,6 +77,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
               {phoneNumber.length > 0 && (
                 <TouchableOpacity
                   activeOpacity={0.7}
+                  delayPressIn={0}
                   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                   onPress={() => setPhoneNumber('')}
                   style={styles.clearButton}>
@@ -87,6 +88,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
 
             <TouchableOpacity
               activeOpacity={0.8}
+              delayPressIn={0}
               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               onPress={() => {
                 Keyboard.dismiss();
@@ -113,6 +115,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
           {searchQuery.length > 0 && (
             <TouchableOpacity
               activeOpacity={0.7}
+              delayPressIn={0}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               onPress={() => setSearchQuery('')}
               style={styles.searchClearButton}>
@@ -133,6 +136,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
               <TouchableOpacity
                 key={item.id}
                 activeOpacity={0.7}
+                delayPressIn={0}
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                 onPress={() => setSelectedFilter(item.id)}
                 style={[
@@ -158,6 +162,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
           </Text>
           <TouchableOpacity
             onPress={onRefresh}
+            delayPressIn={0}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             style={styles.refreshButton}>
             <Text style={styles.refreshButtonText}>↻ Refresh</Text>

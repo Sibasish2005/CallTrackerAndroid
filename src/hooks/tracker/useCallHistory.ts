@@ -122,9 +122,7 @@ export function useCallHistory(
       } catch (error: any) {
         console.log('Error fetching call history:', error?.message);
       } finally {
-        if (showIndicator) {
-          setIsLoadingHistory(false);
-        }
+        setIsLoadingHistory(false);
       }
     },
     [getOutcomeForCall, loadAppCalls, onLatestCallFound]

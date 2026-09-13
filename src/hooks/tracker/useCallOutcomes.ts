@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { NativeModules } from 'react-native';
 import { CallRecord } from '../../types';
 import { getOutcomeById } from '../../config/outcomes';
@@ -29,9 +29,9 @@ export function useCallOutcomes(): UseCallOutcomesReturn {
     Record<string, { outcomeId: string; outcomeLabel: string; notes?: string }>
   >({});
 
-  const getOutcomeForCall = (callId: string) => {
+  const getOutcomeForCall = useCallback((callId: string) => {
     return outcomeMapRef.current[callId];
-  };
+  }, []);
 
   const saveCallOutcome = (
     callId: string,
