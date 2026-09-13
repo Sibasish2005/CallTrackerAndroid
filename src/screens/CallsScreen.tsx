@@ -170,9 +170,9 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>No matching calls found</Text>
+              <Text style={styles.emptyTitle}>No HEEYAKU calls yet</Text>
               <Text style={styles.emptySubtitle}>
-                Try adjusting your search query or filter tab
+                Calls dialed using the Quick Cellular Dialer above will appear here
               </Text>
             </View>
           ) : (

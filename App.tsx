@@ -15,9 +15,9 @@ function MainApp() {
   const insets = useSafeAreaInsets();
   const tracker = useCallTracker();
 
-  // Authoritative metrics: today-only separated from lifetime (lifetime computed strictly from appCalls)
+  // Authoritative metrics: strictly computed from HEEYAKU app-initiated calls
   const { todayCalls, todayMetrics, lifetimeMetrics } = useCallMetrics(
-    tracker.callHistory,
+    tracker.appCalls,
     tracker.appCalls
   );
 
@@ -46,10 +46,10 @@ function MainApp() {
         todayMetrics={todayMetrics}
         todayCalls={todayCalls}
         lifetimeMetrics={lifetimeMetrics}
-        allCalls={tracker.callHistory}
+        allCalls={tracker.appCalls}
         appCalls={tracker.appCalls}
         filteredCalls={tracker.filteredHistory}
-        allCallsCount={tracker.callHistory.length}
+        allCallsCount={tracker.appCalls.length}
         isLoadingHistory={tracker.isLoadingHistory}
         searchQuery={tracker.searchQuery}
         setSearchQuery={tracker.setSearchQuery}

@@ -410,17 +410,17 @@ export function useCallTracker() {
 
   const isCallActive = callState === 'OFFHOOK';
 
-  // Filtered call history based on tab and search
+  // Filtered call history: STRICTLY APP-INITIATED CALLS
   const filteredHistory = useMemo(() => {
-    return callHistory.filter(item => {
+    return appCalls.filter(item => {
       // Tab filter
-      if (selectedFilter === 'OUTGOING' && item.callType !== 'OUTGOING' && item.type !== 2) {
+      if (selectedFilter === 'OUTGOING' && item.callType !== 'OUTGOING') {
         return false;
       }
-      if (selectedFilter === 'INCOMING' && item.callType !== 'INCOMING' && item.type !== 1) {
+      if (selectedFilter === 'INCOMING' && item.callType !== 'INCOMING') {
         return false;
       }
-      if (selectedFilter === 'MISSED' && item.callType !== 'MISSED' && item.type !== 3 && item.type !== 5) {
+      if (selectedFilter === 'MISSED' && item.callType !== 'MISSED') {
         return false;
       }
       if (selectedFilter === 'CONNECTED' && !item.connected) {
@@ -440,7 +440,7 @@ export function useCallTracker() {
 
       return true;
     });
-  }, [callHistory, selectedFilter, searchQuery]);
+  }, [appCalls, selectedFilter, searchQuery]);
 
   return {
     callState,
