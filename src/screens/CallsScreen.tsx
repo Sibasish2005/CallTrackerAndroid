@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -55,7 +55,37 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
   onRefresh,
   onSelectCall,
 }) => {
+  const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const [isButtonRefreshing, setIsButtonRefreshing] = useState(false);
+
   const canDial = phoneNumber.trim().length > 0;
+
+  // Smooth refresh on button click: slight UI change with a small timeout, zero jitter
+  const handleButtonRefresh = useCallback(async () => {
+    if (isButtonRefreshing || isLoading) return;
+    setIsButtonRefreshing(true);
+    try {
+      const refreshPromise = Promise.resolve(onRefresh());
+      const minDelay = new Promise<void>(resolve => setTimeout(() => resolve(), 550));
+      await Promise.all([refreshPromise, minDelay]);
+    } finally {
+      setIsButtonRefreshing(false);
+    }
+  }, [isButtonRefreshing, isLoading, onRefresh]);
+
+  // Pull to refresh handler: smooth animation with dark spinner, no jarring layout shift
+  const handlePullRefresh = useCallback(async () => {
+    setIsPullRefreshing(true);
+    try {
+      const refreshPromise = Promise.resolve(onRefresh());
+      const minDelay = new Promise<void>(resolve => setTimeout(() => resolve(), 550));
+      await Promise.all([refreshPromise, minDelay]);
+    } finally {
+      setIsPullRefreshing(false);
+    }
+  }, [onRefresh]);
+
+  const isAnyRefreshing = isButtonRefreshing || isLoading;
 
   return (
     <View style={styles.container}>
@@ -161,31 +191,25 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
             {filteredCalls.length} of {allCallsCount} calls
           </Text>
           <TouchableOpacity
-            onPress={onRefresh}
-            disabled={isLoading}
+            onPress={handleButtonRefresh}
+            disabled={isAnyRefreshing}
             delayPressIn={0}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.refreshButton, isLoading && styles.refreshButtonDisabled]}>
-            {isLoading ? (
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={[styles.refreshButton, isButtonRefreshing && styles.refreshButtonActive]}>
+            {isButtonRefreshing ? (
               <View style={styles.refreshLoadingContainer}>
                 <ActivityIndicator size="small" color={COLORS.monoSilver} style={styles.miniSpinner} />
-                <Text style={styles.refreshButtonText}>Syncing...</Text>
+                <Text style={styles.refreshButtonTextSyncing}>Syncing...</Text>
               </View>
             ) : (
               <Text style={styles.refreshButtonText}>↻ Refresh</Text>
             )}
           </TouchableOpacity>
         </View>
-
-        {/* Subtle lazy loading indicator line when syncing with existing items */}
-        {isLoading && filteredCalls.length > 0 && (
-          <View style={styles.lazyLoadingBarContainer}>
-            <View style={styles.lazyLoadingBar} />
-          </View>
-        )}
       </View>
 
-      {/* Calls History List with Lazy Loading Skeletons */}
+      {/* Calls History List */}
       <FlatList
         data={filteredCalls}
         keyExtractor={item => item.id}
@@ -203,21 +227,13 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
         )}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={onRefresh}
+            refreshing={isPullRefreshing}
+            onRefresh={handlePullRefresh}
             colors={[COLORS.monoWhite]}
             progressBackgroundColor="#23252E"
             tintColor={COLORS.monoWhite}
             progressViewOffset={10}
           />
-        }
-        ListFooterComponent={
-          isLoading && filteredCalls.length > 0 ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={COLORS.monoSilver} />
-              <Text style={styles.footerLoaderText}>Syncing records...</Text>
-            </View>
-          ) : undefined
         }
         ListEmptyComponent={
           isLoading ? (
@@ -375,44 +391,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 6,
     paddingHorizontal: 4,
+    minHeight: 28,
   },
   summaryText: {
     fontSize: 12,
     color: COLORS.textTertiary,
   },
   refreshButton: {
+    minHeight: 28,
+    minWidth: 74,
     paddingVertical: 4,
     paddingHorizontal: 8,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshButtonActive: {
+    opacity: 0.8,
   },
   refreshButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   refreshLoadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 5,
   },
   miniSpinner: {
-    transform: [{ scale: 0.75 }],
+    transform: [{ scale: 0.7 }],
   },
   refreshButtonText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.monoSilver,
   },
-  lazyLoadingBarContainer: {
-    height: 2,
-    width: '100%',
-    backgroundColor: '#262832',
-    marginTop: 8,
-    borderRadius: 1,
-    overflow: 'hidden',
-  },
-  lazyLoadingBar: {
-    height: 2,
-    width: '50%',
-    backgroundColor: COLORS.monoWhite,
-    borderRadius: 1,
+  refreshButtonTextSyncing: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textTertiary,
   },
   skeletonList: {
     paddingTop: 4,
@@ -473,18 +490,6 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 19,
     backgroundColor: '#262832',
-  },
-  footerLoader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-  },
-  footerLoaderText: {
-    fontSize: 12,
-    color: COLORS.textTertiary,
-    fontWeight: '500',
   },
   emptyContainer: {
     padding: 40,

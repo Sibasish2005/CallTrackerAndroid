@@ -72,51 +72,60 @@ export function useCallHistory(
         // Always sync app calls concurrently
         loadAppCalls();
 
+        // When showing indicator (e.g. refresh), enforce a smooth minimum delay
+        // to prevent instant flickering and accommodate future server latency
+        const minDelay = showIndicator
+          ? new Promise<void>(resolve => setTimeout(() => resolve(), 500))
+          : Promise.resolve();
+
+        let rawHistoryPromise: Promise<any[]> = Promise.resolve([]);
         if (CallTracker?.getCallHistory) {
-          const rawHistory: any[] = await CallTracker.getCallHistory(200);
-          if (Array.isArray(rawHistory)) {
-            const mapped: CallRecord[] = rawHistory.map((item, index) => {
-              const rawType = Number(item.type) || 2;
-              const callType =
-                rawType === 1
-                  ? 'INCOMING'
-                  : rawType === 3
-                  ? 'MISSED'
-                  : rawType === 5
-                  ? 'REJECTED'
-                  : 'OUTGOING';
+          rawHistoryPromise = CallTracker.getCallHistory(200);
+        }
 
-              const durationSecs = Number(item.duration) || 0;
-              const isConnected = durationSecs > 0 && rawType !== 3 && rawType !== 5;
-              const id = String(item.id || `${item.date || Date.now()}_${index}`);
-              const savedOutcome = getOutcomeForCall?.(id);
+        const [rawHistory] = await Promise.all([rawHistoryPromise, minDelay]);
+        if (Array.isArray(rawHistory)) {
+          const mapped: CallRecord[] = rawHistory.map((item, index) => {
+            const rawType = Number(item.type) || 2;
+            const callType =
+              rawType === 1
+                ? 'INCOMING'
+                : rawType === 3
+                ? 'MISSED'
+                : rawType === 5
+                ? 'REJECTED'
+                : 'OUTGOING';
 
-              return {
-                id,
-                employeeId: 'EMP-1082',
-                phoneNumber: item.number || 'Unknown',
-                contactName: item.name || '',
-                callType,
-                startedAt: Number(item.date) || Date.now(),
-                endedAt: Number(item.date) + durationSecs * 1000,
-                durationSeconds: durationSecs,
-                connected: isConnected,
-                outcomeId: savedOutcome?.outcomeId,
-                outcomeLabel: savedOutcome?.outcomeLabel,
-                notes: savedOutcome?.notes,
-                createdAt: Number(item.date) || Date.now(),
-                number: item.number || 'Unknown',
-                name: item.name || '',
-                duration: durationSecs,
-                date: Number(item.date) || Date.now(),
-                type: rawType,
-              };
-            });
+            const durationSecs = Number(item.duration) || 0;
+            const isConnected = durationSecs > 0 && rawType !== 3 && rawType !== 5;
+            const id = String(item.id || `${item.date || Date.now()}_${index}`);
+            const savedOutcome = getOutcomeForCall?.(id);
 
-            setCallHistory(mapped);
-            if (mapped.length > 0) {
-              onLatestCallFound?.(mapped[0]);
-            }
+            return {
+              id,
+              employeeId: 'EMP-1082',
+              phoneNumber: item.number || 'Unknown',
+              contactName: item.name || '',
+              callType,
+              startedAt: Number(item.date) || Date.now(),
+              endedAt: Number(item.date) + durationSecs * 1000,
+              durationSeconds: durationSecs,
+              connected: isConnected,
+              outcomeId: savedOutcome?.outcomeId,
+              outcomeLabel: savedOutcome?.outcomeLabel,
+              notes: savedOutcome?.notes,
+              createdAt: Number(item.date) || Date.now(),
+              number: item.number || 'Unknown',
+              name: item.name || '',
+              duration: durationSecs,
+              date: Number(item.date) || Date.now(),
+              type: rawType,
+            };
+          });
+
+          setCallHistory(mapped);
+          if (mapped.length > 0) {
+            onLatestCallFound?.(mapped[0]);
           }
         }
       } catch (error: any) {
