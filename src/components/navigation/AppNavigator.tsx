@@ -3,11 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { CallRecord, CallState, EmployeeMetrics, FilterTab, TabRoute } from '../../types';
 import { BottomNavBar } from './BottomNavBar';
 import { DashboardScreen } from '../../screens/DashboardScreen';
+import { LeadsScreen } from '../../screens/LeadsScreen';
 import { CallsScreen } from '../../screens/CallsScreen';
 import { AnalyticsScreen } from '../../screens/AnalyticsScreen';
 import { ProfileScreen } from '../../screens/ProfileScreen';
 
 interface AppNavigatorProps {
+  onLogout?: () => void;
   callState: CallState;
   phoneNumber: string;
   setPhoneNumber: (num: string) => void;
@@ -61,13 +63,19 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
   onRefreshHistory,
   onRequestPermissions,
   onSelectCall,
+  onLogout,
 }) => {
-  const [currentTab, setCurrentTab] = useState<TabRoute>('dashboard');
+  const [currentTab, setCurrentTab] = useState<TabRoute>('leads');
 
   return (
     <View style={styles.container}>
       <View style={styles.screenContainer}>
-        {/* Main Daily Dashboard (Shows ONLY TODAY'S data) */}
+        {/* Tab 1: Assigned Leads CRM (Replaces legacy calls tab) */}
+        {currentTab === 'leads' && (
+          <LeadsScreen onMakeCall={onMakeCall} />
+        )}
+
+        {/* Main Daily Dashboard */}
         {currentTab === 'dashboard' && (
           <DashboardScreen
             callState={callState}
@@ -77,13 +85,13 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             metrics={todayMetrics}
             recentCalls={todayCalls}
             isListening={isListening}
-            onNavigateToCalls={() => setCurrentTab('calls')}
+            onNavigateToCalls={() => setCurrentTab('leads')}
             onQuickCall={onMakeCall}
             onSelectCall={onSelectCall}
           />
         )}
 
-        {/* Calls Page (Call history and dialer) */}
+        {/* Legacy Calls Page fallback */}
         {currentTab === 'calls' && (
           <CallsScreen
             phoneNumber={phoneNumber}
@@ -101,7 +109,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
           />
         )}
 
-        {/* Performance Analytics (1. Daily, 2. Monthly, 3. Lifetime on ONE screen) */}
+        {/* Performance Analytics */}
         {currentTab === 'analytics' && (
           <AnalyticsScreen
             todayMetrics={todayMetrics}
@@ -119,6 +127,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             statusMessage={statusMessage}
             onRequestPermissions={onRequestPermissions}
             onRefreshListener={onRefreshHistory}
+            onLogout={onLogout}
           />
         )}
       </View>

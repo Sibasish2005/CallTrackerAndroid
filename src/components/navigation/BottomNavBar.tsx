@@ -17,25 +17,25 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   return (
     <View style={styles.navWrapper}>
       <View style={styles.navBar}>
-        {/* Tab 1: Calls (Call history and calling) */}
+        {/* Tab 1: Leads (Assigned leads CRM and actions) */}
         <TouchableOpacity
           activeOpacity={0.7}
           delayPressIn={0}
-          onPress={() => onSelectTab('calls')}
+          onPress={() => onSelectTab('leads')}
           style={styles.tabItem}>
           <Icon
-            name="call"
+            name="leads"
             size={20}
-            color={currentTab === 'calls' ? COLORS.monoWhite : COLORS.monoMuted}
+            color={currentTab === 'leads' ? COLORS.monoWhite : COLORS.monoMuted}
           />
           <Text
             style={[
               styles.tabLabel,
-              currentTab === 'calls' && styles.tabLabelActive,
+              currentTab === 'leads' && styles.tabLabelActive,
             ]}>
-            Calls
+            Leads
           </Text>
-          {currentTab === 'calls' && <View style={styles.activePill} />}
+          {currentTab === 'leads' && <View style={styles.activePill} />}
         </TouchableOpacity>
 
         {/* Tab 2: HEEYAKU (Home / Main daily dashboard) */}

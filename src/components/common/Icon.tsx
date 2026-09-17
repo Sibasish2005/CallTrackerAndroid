@@ -4,6 +4,8 @@ import { COLORS } from '../../theme/colors';
 
 export type IconName =
   | 'call'
+  | 'leads'
+  | 'whatsapp'
   | 'analytics'
   | 'profile'
   | 'search'
@@ -85,6 +87,67 @@ export const Icon: React.FC<IconProps> = ({
                 height: s * 0.24,
                 borderRadius: s * 0.1,
                 backgroundColor: color,
+              }}
+            />
+          </View>
+        </View>
+      );
+    }
+
+    case 'leads': {
+      const s = size;
+      return (
+        <View style={[{ width: s, height: s, alignItems: 'center', justifyContent: 'center' }, style]}>
+          {/* User head */}
+          <View
+            style={{
+              width: s * 0.36,
+              height: s * 0.36,
+              borderRadius: s * 0.18,
+              borderWidth: stroke,
+              borderColor: color,
+              marginBottom: 1.5,
+            }}
+          />
+          {/* User torso */}
+          <View
+            style={{
+              width: s * 0.65,
+              height: s * 0.35,
+              borderTopLeftRadius: s * 0.2,
+              borderTopRightRadius: s * 0.2,
+              borderWidth: stroke,
+              borderBottomWidth: 0,
+              borderColor: color,
+            }}
+          />
+        </View>
+      );
+    }
+
+    case 'whatsapp': {
+      const s = size;
+      return (
+        <View style={[{ width: s, height: s, alignItems: 'center', justifyContent: 'center' }, style]}>
+          {/* Chat bubble circle */}
+          <View
+            style={{
+              width: s * 0.85,
+              height: s * 0.85,
+              borderRadius: s * 0.425,
+              borderWidth: stroke,
+              borderColor: color,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            {/* Inner phone glyph or dot */}
+            <View
+              style={{
+                width: s * 0.3,
+                height: s * 0.3,
+                borderRadius: s * 0.08,
+                borderWidth: stroke,
+                borderColor: color,
               }}
             />
           </View>

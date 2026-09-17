@@ -50,7 +50,7 @@ export interface EmployeeMetrics {
 
 export type FilterTab = 'ALL' | 'CONNECTED' | 'NOT_CONNECTED' | 'OUTGOING' | 'INCOMING' | 'MISSED';
 
-export type TabRoute = 'dashboard' | 'calls' | 'analytics' | 'profile';
+export type TabRoute = 'dashboard' | 'leads' | 'calls' | 'analytics' | 'profile';
 
 export type CallTrackerEvents = {
   CallStateChanged: [string];

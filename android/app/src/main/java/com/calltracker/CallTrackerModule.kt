@@ -419,6 +419,42 @@ class CallTrackerModule(
         }
     }
 
+    @ReactMethod
+    fun setItem(key: String, value: String, promise: Promise) {
+        bgExecutor.execute {
+            try {
+                prefs.edit().putString(key, value).apply()
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("STORAGE_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getItem(key: String, promise: Promise) {
+        bgExecutor.execute {
+            try {
+                val value = prefs.getString(key, null)
+                promise.resolve(value)
+            } catch (e: Exception) {
+                promise.reject("STORAGE_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun removeItem(key: String, promise: Promise) {
+        bgExecutor.execute {
+            try {
+                prefs.edit().remove(key).apply()
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("STORAGE_ERROR", e.message, e)
+            }
+        }
+    }
+
     private fun persistAppCallRecord(record: JSONObject) {
         synchronized(storageLock) {
             try {

@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
-import { StatusBar, StyleSheet, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import { COLORS } from './src/theme/colors';
 import { useCallTracker } from './src/hooks/useCallTracker';
 import { useCallMetrics } from './src/hooks/useCallMetrics';
 import { AppNavigator } from './src/components/navigation/AppNavigator';
 import { CallOutcomeModal } from './src/components/outcome/CallOutcomeModal';
 import { CallRecord } from './src/types';
+import { authStorage, EmployeeProfile } from './src/services/authStorage';
+import { LoginScreen } from './src/screens/LoginScreen';
 
-function MainApp() {
+function MainApp({ onLogout }: { onLogout: () => void }) {
   const statusBarHeight = StatusBar.currentHeight ?? 24;
   const tracker = useCallTracker();
 
@@ -32,6 +34,7 @@ function MainApp() {
         },
       ]}>
       <AppNavigator
+        onLogout={onLogout}
         callState={tracker.callState}
         phoneNumber={tracker.phoneNumber}
         setPhoneNumber={tracker.setPhoneNumber}
@@ -77,10 +80,42 @@ function MainApp() {
 }
 
 export default function App() {
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const [currentEmployee, setCurrentEmployee] = useState<EmployeeProfile | null>(null);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const session = await authStorage.getSession();
+        if (session?.token && session.employee) {
+          setCurrentEmployee(session.employee);
+        }
+      } catch (e) {
+        console.warn('Auth check error:', e);
+      } finally {
+        setSessionChecked(true);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  if (!sessionChecked) {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <StatusBar barStyle="light-content" />
+        <ActivityIndicator color={COLORS.brandCyan} size="large" />
+      </View>
+    );
+  }
+
   return (
     <>
       <StatusBar barStyle="light-content" />
-      <MainApp />
+      {currentEmployee ? (
+        <MainApp onLogout={() => setCurrentEmployee(null)} />
+      ) : (
+        <LoginScreen onLoginSuccess={(emp) => setCurrentEmployee(emp)} />
+      )}
     </>
   );
 }
@@ -89,5 +124,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#121316',
+  },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
