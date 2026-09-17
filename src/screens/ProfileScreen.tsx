@@ -67,6 +67,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   useEffect(() => {
     loadBackendProfile();
+    const interval = setInterval(() => {
+      loadBackendProfile(false);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [loadBackendProfile]);
 
   const handleLogout = async () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { CallRecord, CallState, EmployeeMetrics, FilterTab, TabRoute } from '../../types';
 import { BottomNavBar } from './BottomNavBar';
@@ -66,6 +66,10 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
   onLogout,
 }) => {
   const [currentTab, setCurrentTab] = useState<TabRoute>('leads');
+
+  useEffect(() => {
+    onRefreshHistory();
+  }, [currentTab, onRefreshHistory]);
 
   return (
     <View style={styles.container}>

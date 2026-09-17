@@ -58,6 +58,10 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
   useEffect(() => {
     fetchBackendAnalytics();
+    const interval = setInterval(() => {
+      fetchBackendAnalytics(false);
+    }, 4000);
+    return () => clearInterval(interval);
   }, [fetchBackendAnalytics]);
 
   const todayMetrics = backendTodayMetrics !== null ? backendTodayMetrics : propTodayMetrics;

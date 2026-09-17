@@ -53,6 +53,10 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
 
   useEffect(() => {
     fetchLeads();
+    const interval = setInterval(() => {
+      fetchLeads(false);
+    }, 4000);
+    return () => clearInterval(interval);
   }, [fetchLeads]);
 
   const filteredLeads = useMemo(() => {

@@ -309,6 +309,15 @@ export function useCallTracker() {
     };
   }, [appCalls]);
 
+  // Periodic real-time synchronization with authoritative database every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadCallHistoryRef.current(false);
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
 
   return {
     callState,
