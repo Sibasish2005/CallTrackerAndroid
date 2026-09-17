@@ -10,5 +10,6 @@ export const API_ENDPOINTS = {
   leads: `${API_BASE_URL}/api/employee/leads`,
   leadDisposition: (leadId: string) => `${API_BASE_URL}/api/employee/leads/${leadId}/disposition`,
   syncCalls: `${API_BASE_URL}/api/employee/calls/sync`,
+  analytics: `${API_BASE_URL}/api/employee/analytics`,
 };
 

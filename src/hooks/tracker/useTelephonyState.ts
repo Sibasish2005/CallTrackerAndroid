@@ -47,6 +47,7 @@ export function useTelephonyState({
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const activeNumberRef = useRef<string>('');
   const reachedOffhookRef = useRef<boolean>(false);
+  const isAppDialingRef = useRef<boolean>(false);
 
   const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -131,7 +132,8 @@ export function useTelephonyState({
         const recordId = id ? String(id) : `${date}_${Date.now()}`;
         const finalNumber = number || activeNumberRef.current || 'Outgoing Call';
 
-        const wasAppInitiated = Boolean(data?.isAppInitiated || activeNumberRef.current);
+        const wasAppInitiated = Boolean(isAppDialingRef.current || data?.isAppInitiated || activeNumberRef.current);
+        isAppDialingRef.current = false;
 
         const completedRecord: CallRecord = {
           id: recordId,
@@ -188,6 +190,7 @@ export function useTelephonyState({
     }
 
     try {
+      isAppDialingRef.current = true;
       activeNumberRef.current = target;
       reachedOffhookRef.current = false;
       setActiveNumber(target);

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   BackHandler,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import { DEFAULT_CALL_OUTCOMES } from '../config/outcomes';
 import { formatVerboseDuration } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
 import { calculateMetrics } from '../hooks/useCallMetrics';
+import { apiClient } from '../services/apiClient';
 
 interface AnalyticsScreenProps {
   todayMetrics: EmployeeMetrics;
@@ -24,11 +26,44 @@ interface AnalyticsScreenProps {
 }
 
 export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
-  todayMetrics,
-  todayCalls,
-  lifetimeMetrics,
-  appCalls = [],
+  todayMetrics: propTodayMetrics,
+  todayCalls: propTodayCalls,
+  lifetimeMetrics: propLifetimeMetrics,
+  appCalls: propAppCalls = [],
 }) => {
+  const [backendTodayMetrics, setBackendTodayMetrics] = useState<EmployeeMetrics | null>(null);
+  const [backendLifetimeMetrics, setBackendLifetimeMetrics] = useState<EmployeeMetrics | null>(null);
+  const [backendTodayCalls, setBackendTodayCalls] = useState<CallRecord[] | null>(null);
+  const [backendAllCalls, setBackendAllCalls] = useState<CallRecord[] | null>(null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [isFromBackend, setIsFromBackend] = useState<boolean>(false);
+
+  const fetchBackendAnalytics = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const res = await apiClient.getAnalytics();
+      if (res.success) {
+        if (res.todayMetrics) setBackendTodayMetrics(res.todayMetrics);
+        if (res.lifetimeMetrics) setBackendLifetimeMetrics(res.lifetimeMetrics);
+        if (res.todayCalls) setBackendTodayCalls(res.todayCalls);
+        if (res.allCalls) setBackendAllCalls(res.allCalls);
+        setIsFromBackend(true);
+      }
+    } catch (e) {
+      console.warn('Backend analytics fetch error:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBackendAnalytics();
+  }, [fetchBackendAnalytics]);
+
+  const todayMetrics = backendTodayMetrics || propTodayMetrics;
+  const lifetimeMetrics = backendLifetimeMetrics || propLifetimeMetrics;
+  const todayCalls = backendTodayCalls || propTodayCalls;
+  const appCalls = backendAllCalls || propAppCalls;
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentDate.getMonth());
@@ -206,7 +241,14 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => fetchBackendAnalytics(true)}
+          tintColor="#38BDF8"
+        />
+      }>
       {/* Page Header */}
       <View style={styles.header}>
         <View>
@@ -215,7 +257,11 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
             Daily, monthly and career calling reports
           </Text>
         </View>
-        <Badge label="Realtime" variant="outline" size="sm" />
+        <Badge
+          label={isFromBackend ? 'Cloud DB' : 'Realtime'}
+          variant={isFromBackend ? 'glow' : 'outline'}
+          size="sm"
+        />
       </View>
 
       {/* ========================================================================= */}

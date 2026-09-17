@@ -116,5 +116,25 @@ export const apiClient = {
       return { success: false, error: err.message || 'Network request failed.' };
     }
   },
+
+  async getAnalytics(): Promise<ApiResponse> {
+    const session = await authStorage.getSession();
+    if (!session?.token) {
+      return { success: false, error: 'Unauthenticated session' };
+    }
+    try {
+      const response = await fetch(API_ENDPOINTS.analytics, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.token}`,
+        },
+      });
+      const data = await response.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network request failed.' };
+    }
+  },
 };
 

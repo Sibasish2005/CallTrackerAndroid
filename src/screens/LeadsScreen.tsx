@@ -118,6 +118,8 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
     const isNew = item.status === 'NEW' || item.status === 'ASSIGNED';
     const isContacted = item.status === 'CONTACTED';
     const isConverted = item.status === 'CONVERTED';
+    // WhatsApp button is enabled strictly and ONLY after a disposition option has been selected
+    const isWhatsAppDisabled = isNew;
 
     return (
       <Card variant="default" style={styles.leadCard}>
@@ -164,10 +166,24 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
 
           <TouchableOpacity
             activeOpacity={0.8}
+            disabled={isWhatsAppDisabled}
             onPress={() => handleWhatsAppPress(item)}
-            style={styles.whatsappButton}>
-            <Icon name="whatsapp" size={15} color={COLORS.monoWhite} />
-            <Text style={styles.whatsappButtonText}>WhatsApp</Text>
+            style={[
+              styles.whatsappButton,
+              isWhatsAppDisabled && styles.whatsappButtonDisabled,
+            ]}>
+            <Icon
+              name="whatsapp"
+              size={15}
+              color={isWhatsAppDisabled ? COLORS.monoMuted : COLORS.monoWhite}
+            />
+            <Text
+              style={[
+                styles.whatsappButtonText,
+                isWhatsAppDisabled && styles.whatsappButtonTextDisabled,
+              ]}>
+              {isWhatsAppDisabled ? 'WhatsApp (Disabled)' : 'WhatsApp'}
+            </Text>
           </TouchableOpacity>
         </View>
       </Card>
@@ -451,6 +467,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#16A34A', // WhatsApp Emerald Green
     paddingVertical: 9,
     borderRadius: RADII.sm,
+  },
+  whatsappButtonDisabled: {
+    backgroundColor: '#161922',
+    borderWidth: 1,
+    borderColor: '#262A36',
+    opacity: 0.6,
+  },
+  whatsappButtonTextDisabled: {
+    color: COLORS.monoMuted,
   },
   whatsappButtonText: {
     color: COLORS.monoWhite,

@@ -72,21 +72,38 @@ export function useCallTracker() {
   // 5. Telephony state, dialing & events
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
   onCallEndedEventRef.current = (completedRecord: CallRecord) => {
-    // 1. Update callHistory
+    // 1. Update local callHistory
     setCallHistory(prev => {
       const filtered = prev.filter(c => c.id !== completedRecord.id);
       return [completedRecord, ...filtered.slice(0, 199)];
     });
 
-    // 2. CRITICAL: Only if it was initiated from HEEYAKU app, update appCalls
-    // and show the mandatory KPI outcome modal!
+    // 2. IMMEDIATE BACKEND PERSISTENCE:
+    // Every call (whether connected = true or false) immediately reaches the backend DB
+    const syncPayload = {
+      id: completedRecord.id,
+      phoneNumber: completedRecord.phoneNumber || completedRecord.number,
+      contactName: completedRecord.contactName || completedRecord.name,
+      callType: completedRecord.callType || 'OUTGOING',
+      durationSeconds: completedRecord.durationSeconds ?? completedRecord.duration ?? 0,
+      connected: completedRecord.connected,
+      outcomeId: completedRecord.outcomeId,
+      outcomeLabel: completedRecord.outcomeLabel,
+      notes: completedRecord.notes,
+      startedAt: completedRecord.startedAt || completedRecord.date,
+      endedAt: completedRecord.endedAt,
+    };
+    apiClient.syncCalls([syncPayload]).catch((e: any) => console.log('Immediate call sync err:', e));
+
+    // 3. CRITICAL: Strictly and ONLY if it was initiated from the HEEYAKU app,
+    // update appCalls and show the mandatory KPI outcome modal!
     if (completedRecord.isAppInitiated) {
       setAppCalls(prev => {
         const filtered = prev.filter(c => c.id !== completedRecord.id);
         return [completedRecord, ...filtered];
       });
 
-      // 3. Set the popup modal target (mandatory KPI)
+      // Set the popup modal target (mandatory KPI)
       setPendingOutcomeCall(completedRecord);
     }
   };
