@@ -16,8 +16,17 @@ export const apiClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
       });
-      const data = await response.json();
-      return data;
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return {
+          success: false,
+          error: response.ok
+            ? 'Unexpected response from server.'
+            : `Server returned HTTP ${response.status} (${response.statusText || 'Error'}).`,
+        };
+      }
     } catch (err: any) {
       return { success: false, error: err.message || 'Network request failed.' };
     }
@@ -86,4 +95,26 @@ export const apiClient = {
       return { success: false, error: err.message || 'Network request failed.' };
     }
   },
+
+  async syncCalls(calls: any[]): Promise<ApiResponse> {
+    const session = await authStorage.getSession();
+    if (!session?.token) {
+      return { success: false, error: 'Unauthenticated session' };
+    }
+    try {
+      const response = await fetch(API_ENDPOINTS.syncCalls, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ calls }),
+      });
+      const data = await response.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network request failed.' };
+    }
+  },
 };
+

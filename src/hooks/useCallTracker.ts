@@ -8,6 +8,7 @@ import {
   useCallPermissions,
   useTelephonyState,
 } from './tracker';
+import { apiClient } from '../services/apiClient';
 
 export * from './tracker';
 
@@ -68,23 +69,26 @@ export function useCallTracker() {
   } = useCallFilter(appCalls);
 
   // 5. Telephony state, dialing & events
+  // 5. Telephony state, dialing & events
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
   onCallEndedEventRef.current = (completedRecord: CallRecord) => {
-    // 1. Immediately update callHistory
+    // 1. Update callHistory
     setCallHistory(prev => {
       const filtered = prev.filter(c => c.id !== completedRecord.id);
       return [completedRecord, ...filtered.slice(0, 199)];
     });
 
-    // 2. CRITICAL: Immediately update appCalls as well so todayMetrics, lifetimeMetrics
-    // and all dashboard KPIs immediately reflect this new call!
-    setAppCalls(prev => {
-      const filtered = prev.filter(c => c.id !== completedRecord.id);
-      return [completedRecord, ...filtered];
-    });
+    // 2. CRITICAL: Only if it was initiated from HEEYAKU app, update appCalls
+    // and show the mandatory KPI outcome modal!
+    if (completedRecord.isAppInitiated) {
+      setAppCalls(prev => {
+        const filtered = prev.filter(c => c.id !== completedRecord.id);
+        return [completedRecord, ...filtered];
+      });
 
-    // 3. Set the popup modal target
-    setPendingOutcomeCall(completedRecord);
+      // 3. Set the popup modal target (mandatory KPI)
+      setPendingOutcomeCall(completedRecord);
+    }
   };
   const handleCallEndedEvent = useCallback((completedRecord: CallRecord) => {
     onCallEndedEventRef.current(completedRecord);
@@ -126,9 +130,16 @@ export function useCallTracker() {
     });
   }, [requestPermsBase, startCallListener]);
 
-  // Save call outcome handler: updates outcome in appCalls, callHistory, and lastCall
+  // Save call outcome handler: updates outcome in appCalls, callHistory, and lastCall, AND syncs to backend!
   const saveCallOutcome = useCallback(
-    (callId: string, outcomeId: string, notes?: string) => {
+    async (callId: string, outcomeId: string, notes?: string) => {
+      const targetCall =
+        pendingOutcomeCall?.id === callId
+          ? pendingOutcomeCall
+          : appCalls.find(c => c.id === callId) ||
+            appCalls[0] ||
+            pendingOutcomeCall;
+
       saveOutcomeBase(callId, outcomeId, notes, (_id, outcomeLabel, finalNotes) => {
         // 1. Update appCalls immediately with outcome disposition
         setAppCalls(prev => {
@@ -191,9 +202,32 @@ export function useCallTracker() {
           loadAppCalls();
         }, 300);
       });
+
+      // 5. Backend Sync: Persist call & outcome to PostgreSQL database
+      if (targetCall) {
+        try {
+          const syncPayload = {
+            id: callId,
+            phoneNumber: targetCall.phoneNumber || targetCall.number,
+            contactName: targetCall.contactName || targetCall.name,
+            callType: targetCall.callType || 'OUTGOING',
+            durationSeconds: targetCall.durationSeconds ?? targetCall.duration ?? 0,
+            connected: targetCall.connected,
+            outcomeId,
+            notes: notes?.trim() || undefined,
+            startedAt: targetCall.startedAt || targetCall.date,
+            endedAt: targetCall.endedAt,
+          };
+          const res = await apiClient.syncCalls([syncPayload]);
+          console.log('Call & KPI successfully synced to backend:', res);
+        } catch (syncErr) {
+          console.warn('Failed to sync call to backend:', syncErr);
+        }
+      }
     },
-    [loadAppCalls, pendingOutcomeCall, saveOutcomeBase, setAppCalls, setCallHistory, setLastCall]
+    [appCalls, loadAppCalls, pendingOutcomeCall, saveOutcomeBase, setAppCalls, setCallHistory, setLastCall]
   );
+
 
   // Initial mount: check permissions and start listener (runs strictly ONCE)
   const isInitializedRef = useRef(false);
@@ -220,7 +254,7 @@ export function useCallTracker() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Monitor AppState: Re-sync call history on return
+  // Monitor AppState: Re-sync call history & sync to backend on return
   useEffect(() => {
     const subscription = AppState.addEventListener(
       'change',
@@ -228,6 +262,23 @@ export function useCallTracker() {
         if (nextState === 'active') {
           console.log('App resumed, syncing latest call history...');
           loadCallHistoryRef.current(false);
+
+          // Sync recent app calls with web UI
+          if (appCalls && appCalls.length > 0) {
+            const payload = appCalls.slice(0, 30).map(c => ({
+              phoneNumber: c.phoneNumber || c.number,
+              contactName: c.contactName || c.name,
+              callType: c.callType || 'OUTGOING',
+              durationSeconds: c.durationSeconds ?? c.duration ?? 0,
+              connected: c.connected,
+              outcomeId: c.outcomeId,
+              outcomeLabel: c.outcomeLabel,
+              notes: c.notes,
+              startedAt: c.startedAt || c.date,
+              endedAt: c.endedAt,
+            }));
+            apiClient.syncCalls(payload).catch((e: any) => console.log('Sync err:', e));
+          }
         }
       }
     );
@@ -235,7 +286,8 @@ export function useCallTracker() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [appCalls]);
+
 
   return {
     callState,

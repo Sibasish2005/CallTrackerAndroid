@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  Linking,
+
   RefreshControl,
   StyleSheet,
   Text,
@@ -28,9 +31,8 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  // Modal State for KPI / WhatsApp Gate
+  // Modal State for KPI
   const [activeDispositionLead, setActiveDispositionLead] = useState<LeadItem | null>(null);
-  const [thenOpenWhatsApp, setThenOpenWhatsApp] = useState(false);
 
   const fetchLeads = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -73,18 +75,43 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
   };
 
   const handleWhatsAppPress = (lead: LeadItem) => {
-    // Per requirement: user must update KPI disposition to backend before WhatsApp redirection
-    setActiveDispositionLead(lead);
-    setThenOpenWhatsApp(true);
+    const isPendingCall = lead.status === 'NEW' || lead.status === 'ASSIGNED';
+    if (isPendingCall) {
+      Alert.alert(
+        'Call Required Before WhatsApp',
+        'Please call the student first through Heeyaku. The mandatory KPI disposition modal will appear right after the call to submit discussion outcome and unlock WhatsApp.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Call Student Now',
+            onPress: () => {
+              onMakeCall(lead.phoneNumber, lead.name);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    const cleanNumber = lead.phoneNumber.replace(/[^0-9]/g, '');
+    const targetNumber = cleanNumber.length === 10 ? `91${cleanNumber}` : cleanNumber;
+    const url = `https://wa.me/${targetNumber}`;
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Linking.openURL(`whatsapp://send?phone=${targetNumber}`);
+      }
+    });
   };
 
   const handleCallPress = (lead: LeadItem) => {
     onMakeCall(lead.phoneNumber, lead.name);
   };
 
+
   const handleDispositionOnly = (lead: LeadItem) => {
     setActiveDispositionLead(lead);
-    setThenOpenWhatsApp(false);
   };
 
   const renderLeadCard = ({ item }: { item: LeadItem }) => {
@@ -224,18 +251,17 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
         />
       )}
 
-      {/* Disposition Modal before WhatsApp */}
+      {/* Manual Disposition Modal if clicked directly */}
       <LeadDispositionModal
         visible={Boolean(activeDispositionLead)}
         lead={activeDispositionLead}
-        thenOpenWhatsApp={thenOpenWhatsApp}
         onClose={() => {
           setActiveDispositionLead(null);
-          setThenOpenWhatsApp(false);
         }}
         onSuccess={handleLeadUpdated}
       />
     </View>
+
   );
 };
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   ScrollView,
   StyleSheet,
@@ -16,18 +17,18 @@ import { formatVerboseDuration } from '../../utils/formatters';
 interface CallOutcomeModalProps {
   call: CallRecord | null;
   visible: boolean;
-  onSave: (callId: string, outcomeId: string, notes?: string) => void;
-  onDismiss: () => void;
+  onSave: (callId: string, outcomeId: string, notes?: string) => Promise<void> | void;
+  onDismiss?: () => void;
 }
 
 export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
   call,
   visible,
   onSave,
-  onDismiss,
 }) => {
   const [selectedOutcomeId, setSelectedOutcomeId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!call) return null;
 
@@ -36,19 +37,18 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
   const outcomes = getOutcomesForCall(isConnected);
 
   const selectedOutcome = outcomes.find(o => o.id === selectedOutcomeId);
-  const canSubmit = Boolean(selectedOutcomeId);
+  const canSubmit = Boolean(selectedOutcomeId) && !submitting;
 
-  const handleSave = () => {
-    if (!selectedOutcomeId) return;
-    onSave(call.id, selectedOutcomeId, notes.trim());
-    setSelectedOutcomeId(null);
-    setNotes('');
-  };
-
-  const handleClose = () => {
-    setSelectedOutcomeId(null);
-    setNotes('');
-    onDismiss();
+  const handleSave = async () => {
+    if (!selectedOutcomeId || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSave(call.id, selectedOutcomeId, notes.trim());
+      setSelectedOutcomeId(null);
+      setNotes('');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -56,7 +56,9 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={handleClose}>
+      onRequestClose={() => {
+        // Enforce mandatory completion: Back button cannot dismiss without KPI
+      }}>
       <View style={styles.overlay}>
         <View style={styles.sheetContainer}>
           {/* Handle bar */}
@@ -64,9 +66,9 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
 
           {/* Header */}
           <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Call Outcome</Text>
-              <Text style={styles.subtitle}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>Call Outcome (KPI)</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>
                 {call.contactName || call.phoneNumber || call.number}
               </Text>
             </View>
@@ -78,9 +80,16 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
             </View>
           </View>
 
+          {/* Mandatory Gate Notice Banner */}
+          <View style={styles.noticeBanner}>
+            <Text style={styles.noticeText}>
+              ⚠️ Mandatory KPI: Record the discussion outcome to update dashboard metrics and unlock WhatsApp.
+            </Text>
+          </View>
+
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            {/* Outcome Selection Grid - Monochromatic */}
-            <Text style={styles.sectionLabel}>SELECT DISPOSITION</Text>
+            {/* Outcome Selection Grid */}
+            <Text style={styles.sectionLabel}>SELECT DISPOSITION *</Text>
             <View style={styles.chipGrid}>
               {outcomes.map(outcome => {
                 const isSelected = selectedOutcomeId === outcome.id;
@@ -107,7 +116,7 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
 
             {/* Notes Input */}
             <Text style={styles.sectionLabel}>
-              NOTES {selectedOutcome?.requiresNotes ? '(REQUIRED)' : '(OPTIONAL)'}
+              DISCUSSION NOTES {selectedOutcome?.requiresNotes ? '(REQUIRED)' : '(OPTIONAL)'}
             </Text>
             <TextInput
               value={notes}
@@ -120,15 +129,8 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
             />
           </ScrollView>
 
-          {/* Actions */}
+          {/* Actions: Mandatory Submit Button */}
           <View style={styles.footer}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={handleClose}
-              style={styles.cancelButton}>
-              <Text style={styles.cancelText}>Skip</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity
               activeOpacity={0.8}
               onPress={handleSave}
@@ -137,7 +139,11 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
                 styles.saveButton,
                 !canSubmit && styles.saveButtonDisabled,
               ]}>
-              <Text style={styles.saveText}>Save Outcome</Text>
+              {submitting ? (
+                <ActivityIndicator color={COLORS.monoWhite} size="small" />
+              ) : (
+                <Text style={styles.saveText}>Save KPI & Continue →</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -149,7 +155,7 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
   },
   sheetContainer: {
@@ -158,7 +164,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
-    maxHeight: '85%',
+    maxHeight: '88%',
     paddingBottom: 24,
   },
   handle: {
@@ -180,14 +186,15 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.borderSubtle,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
     color: COLORS.monoWhite,
   },
   subtitle: {
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: COLORS.brandCyan,
     marginTop: 2,
+    fontWeight: '600',
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -198,9 +205,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surfaceSubtle,
   },
   statusText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: COLORS.monoSilver,
+  },
+  noticeBanner: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(56, 189, 248, 0.2)',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  noticeText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
   },
   body: {
     paddingHorizontal: 20,
@@ -221,8 +241,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: 12,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -230,8 +250,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chipSelected: {
-    backgroundColor: COLORS.surfaceHighlight,
-    borderColor: COLORS.borderActive,
+    backgroundColor: COLORS.brandBlue,
+    borderColor: COLORS.brandCyan,
   },
   chipText: {
     fontSize: 13,
@@ -249,43 +269,26 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 12,
     color: COLORS.textPrimary,
-    fontSize: 14,
+    fontSize: 13,
     minHeight: 70,
     textAlignVertical: 'top',
     marginBottom: 20,
   },
   footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 8,
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-  cancelText: {
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    fontSize: 14,
+    paddingTop: 10,
   },
   saveButton: {
-    flex: 2,
+    width: '100%',
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: COLORS.surfaceHighlight,
-    borderWidth: 1,
-    borderColor: COLORS.borderActive,
+    borderRadius: 14,
+    backgroundColor: COLORS.brandBlue,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   saveButtonDisabled: {
     opacity: 0.4,
+    backgroundColor: COLORS.surfaceHighlight,
   },
   saveText: {
     color: COLORS.monoWhite,

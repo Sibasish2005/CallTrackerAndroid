@@ -131,11 +131,13 @@ export function useTelephonyState({
         const recordId = id ? String(id) : `${date}_${Date.now()}`;
         const finalNumber = number || activeNumberRef.current || 'Outgoing Call';
 
+        const wasAppInitiated = Boolean(data?.isAppInitiated || activeNumberRef.current);
+
         const completedRecord: CallRecord = {
           id: recordId,
           employeeId: 'EMP-1082',
           phoneNumber: finalNumber,
-          contactName: name || '',
+          contactName: name || activeContactName || '',
           callType: 'OUTGOING',
           startedAt: date,
           endedAt: date + callDuration * 1000,
@@ -143,15 +145,16 @@ export function useTelephonyState({
           connected: wasConnected,
           createdAt: date,
           number: finalNumber,
-          name: name || '',
+          name: name || activeContactName || '',
           duration: callDuration,
           date,
           type: 2,
-          isAppInitiated: true,
+          isAppInitiated: wasAppInitiated,
         };
 
         setLastCall(completedRecord);
         onCallEndedEvent(completedRecord);
+
 
         // Reset active tracking state
         reachedOffhookRef.current = false;

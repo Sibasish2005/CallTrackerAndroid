@@ -61,5 +61,6 @@ export type CallTrackerEvents = {
     number?: string;
     name?: string;
     date?: number;
+    isAppInitiated?: boolean;
   }];
 };

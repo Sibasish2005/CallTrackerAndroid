@@ -9,4 +9,6 @@ export const API_ENDPOINTS = {
   me: `${API_BASE_URL}/api/employee/auth/me`,
   leads: `${API_BASE_URL}/api/employee/leads`,
   leadDisposition: (leadId: string) => `${API_BASE_URL}/api/employee/leads/${leadId}/disposition`,
+  syncCalls: `${API_BASE_URL}/api/employee/calls/sync`,
 };
+
