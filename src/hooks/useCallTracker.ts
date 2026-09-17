@@ -280,21 +280,25 @@ export function useCallTracker() {
           console.log('App resumed, syncing latest call history...');
           loadCallHistoryRef.current(false);
 
-          // Sync recent app calls with web UI
+          // Only sync calls that have not been synced yet
           if (appCalls && appCalls.length > 0) {
-            const payload = appCalls.slice(0, 30).map(c => ({
-              phoneNumber: c.phoneNumber || c.number,
-              contactName: c.contactName || c.name,
-              callType: c.callType || 'OUTGOING',
-              durationSeconds: c.durationSeconds ?? c.duration ?? 0,
-              connected: c.connected,
-              outcomeId: c.outcomeId,
-              outcomeLabel: c.outcomeLabel,
-              notes: c.notes,
-              startedAt: c.startedAt || c.date,
-              endedAt: c.endedAt,
-            }));
-            apiClient.syncCalls(payload).catch((e: any) => console.log('Sync err:', e));
+            const unsyncedCalls = appCalls.filter(c => !c.synced).slice(0, 10);
+            if (unsyncedCalls.length > 0) {
+              const payload = unsyncedCalls.map(c => ({
+                id: c.id,
+                phoneNumber: c.phoneNumber || c.number,
+                contactName: c.contactName || c.name,
+                callType: c.callType || 'OUTGOING',
+                durationSeconds: c.durationSeconds ?? c.duration ?? 0,
+                connected: c.connected,
+                outcomeId: c.outcomeId,
+                outcomeLabel: c.outcomeLabel,
+                notes: c.notes,
+                startedAt: c.startedAt || c.date,
+                endedAt: c.endedAt,
+              }));
+              apiClient.syncCalls(payload).catch((e: any) => console.log('Sync err:', e));
+            }
           }
         }
       }
