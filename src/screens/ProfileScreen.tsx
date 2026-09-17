@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -37,9 +38,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     convertedTotal: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    async function loadBackendProfile() {
+  const loadBackendProfile = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    try {
       // 1. Initial load from local cached session
       const cached = await authStorage.getSession();
       if (cached?.employee) {
@@ -47,21 +52,22 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
 
       // 2. Fetch fresh details & live stats from backend
-      try {
-        const res = await apiClient.getMe();
-        if (res.success && res.employee) {
-          setProfile(res.employee);
-          if (res.stats) setStats(res.stats);
-        }
-      } catch (e) {
-        console.warn('Failed to load fresh employee profile:', e);
-      } finally {
-        setLoading(false);
+      const res = await apiClient.getMe();
+      if (res.success && res.employee) {
+        setProfile(res.employee);
+        if (res.stats) setStats(res.stats);
       }
+    } catch (e) {
+      console.warn('Failed to load fresh employee profile:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-
-    loadBackendProfile();
   }, []);
+
+  useEffect(() => {
+    loadBackendProfile();
+  }, [loadBackendProfile]);
 
   const handleLogout = async () => {
     await authStorage.clearSession();
@@ -72,7 +78,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => loadBackendProfile(true)}
+          tintColor="#38BDF8"
+        />
+      }>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>BDA Profile</Text>

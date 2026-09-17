@@ -60,10 +60,10 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
     fetchBackendAnalytics();
   }, [fetchBackendAnalytics]);
 
-  const todayMetrics = backendTodayMetrics || propTodayMetrics;
-  const lifetimeMetrics = backendLifetimeMetrics || propLifetimeMetrics;
-  const todayCalls = backendTodayCalls || propTodayCalls;
-  const appCalls = backendAllCalls || propAppCalls;
+  const todayMetrics = backendTodayMetrics !== null ? backendTodayMetrics : propTodayMetrics;
+  const lifetimeMetrics = backendLifetimeMetrics !== null ? backendLifetimeMetrics : propLifetimeMetrics;
+  const todayCalls = backendTodayCalls !== null ? backendTodayCalls : propTodayCalls;
+  const appCalls = backendAllCalls !== null ? backendAllCalls : propAppCalls;
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentDate.getMonth());

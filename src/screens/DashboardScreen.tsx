@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,6 +29,8 @@ interface DashboardScreenProps {
   onNavigateToCalls: () => void;
   onQuickCall: (number: string, name?: string) => void;
   onSelectCall: (call: CallRecord) => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
@@ -41,6 +44,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onNavigateToCalls,
   onQuickCall,
   onSelectCall,
+  onRefresh,
+  refreshing = false,
 }) => {
   const isOffhook = callState === 'OFFHOOK';
   const isRinging = callState === 'RINGING';
@@ -50,7 +55,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}>
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#38BDF8"
+          />
+        ) : undefined
+      }>
       {/* Top Header - Kept EXACTLY as specified */}
       <View style={styles.header}>
         <View style={styles.brandingRow}>

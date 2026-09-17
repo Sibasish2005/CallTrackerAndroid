@@ -88,6 +88,8 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             onNavigateToCalls={() => setCurrentTab('leads')}
             onQuickCall={onMakeCall}
             onSelectCall={onSelectCall}
+            onRefresh={onRefreshHistory}
+            refreshing={isLoadingHistory}
           />
         )}
 

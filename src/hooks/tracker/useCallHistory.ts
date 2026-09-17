@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { NativeModules } from 'react-native';
 import { CallRecord } from '../../types';
+import { apiClient } from '../../services/apiClient';
 
 const { CallTracker } = NativeModules;
 
@@ -22,8 +23,47 @@ export function useCallHistory(
   const [appCalls, setAppCalls] = useState<CallRecord[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
 
-  // Fetch HEEYAKU app-initiated call history from native storage (unlimited lifetime calls)
+  // Fetch HEEYAKU app-initiated call history: Backend DB is the PRIMARY source of truth
   const loadAppCalls = useCallback(async () => {
+    try {
+      const res = await apiClient.getAnalytics();
+      if (res.success && Array.isArray(res.allCalls)) {
+        const mapped: CallRecord[] = res.allCalls.map((item: any) => ({
+          id: String(item.id),
+          employeeId: item.employeeId || 'EMP-1001',
+          phoneNumber: item.phoneNumber || item.number || 'Unknown',
+          contactName: item.contactName || item.name || '',
+          callType: item.callType || 'OUTGOING',
+          startedAt: Number(item.startedAt || item.date) || Date.now(),
+          endedAt: Number(item.endedAt) || (Number(item.startedAt || item.date) + (Number(item.durationSeconds || item.duration) || 0) * 1000),
+          durationSeconds: Number(item.durationSeconds ?? item.duration) || 0,
+          connected: Boolean(item.connected),
+          outcomeId: item.outcomeId,
+          outcomeLabel: item.outcomeLabel,
+          notes: item.notes,
+          createdAt: Number(item.createdAt || item.startedAt || Date.now()),
+          number: item.phoneNumber || item.number || 'Unknown',
+          name: item.contactName || item.name || '',
+          duration: Number(item.durationSeconds ?? item.duration) || 0,
+          date: Number(item.startedAt || item.date) || Date.now(),
+          type: 2,
+          isAppInitiated: true,
+          synced: true,
+        }));
+
+        setAppCalls(mapped);
+
+        // Keep local native storage in lockstep with the backend DB
+        if (CallTracker?.setItem) {
+          CallTracker.setItem('calls_list', JSON.stringify(mapped)).catch(() => {});
+        }
+        return;
+      }
+    } catch (err: any) {
+      console.log('Backend sync in loadAppCalls failed, falling back to local:', err?.message);
+    }
+
+    // Fallback: Read local device cache if offline
     try {
       if (CallTracker?.getAppCalls) {
         const rawAppCalls: any[] = await CallTracker.getAppCalls();
@@ -38,7 +78,7 @@ export function useCallHistory(
             const notes = item.notes || savedOutcome?.notes;
             return {
               id,
-              employeeId: 'EMP-1082',
+              employeeId: 'EMP-1001',
               phoneNumber: item.number || 'Unknown',
               contactName: item.name || '',
               callType: 'OUTGOING',
@@ -62,9 +102,9 @@ export function useCallHistory(
         }
       }
     } catch (err: any) {
-      console.log('Error loading app calls:', err?.message);
+      console.log('Error loading app calls fallback:', err?.message);
     }
-  }, []);
+  }, [getOutcomeForCall]);
 
   // Fetch call history from native CallLog (up to 200 records)
   const loadCallHistory = useCallback(
