@@ -15,24 +15,38 @@ export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
     };
   }
 
+  // Sort chronologically (oldest first) so only the first connected call for a lead counts
+  const sortedCalls = [...calls].sort((a, b) => {
+    const timeA = Number(a.startedAt || a.date || 0);
+    const timeB = Number(b.startedAt || b.date || 0);
+    return timeA - timeB;
+  });
+
   let attempts = 0;
   let connectedCount = 0;
   let unconnectedCount = 0;
   let totalDuration = 0;
   const outcomeCounts: Record<string, number> = {};
+  const seenConnectedLeads = new Set<string>();
 
-  for (const call of calls) {
+  for (const call of sortedCalls) {
     const duration = call.durationSeconds ?? call.duration ?? 0;
     attempts++;
+    totalDuration += duration;
+
+    const leadKey = call.leadId
+      ? `lead_${call.leadId}`
+      : `phone_${(call.phoneNumber || call.number || '').replace(/[^0-9]/g, '').slice(-10)}`;
 
     // Authoritative connection check (OFFHOOK reached or valid talk time)
-    const isConnected =
+    const isRawConnected =
       call.connected === true ||
       (duration > 0 && call.type !== 3 && call.type !== 5);
 
-    if (isConnected) {
+    // Enforce rule: only the first connected call for the same lead counts as connected
+    if (isRawConnected && !seenConnectedLeads.has(leadKey)) {
+      seenConnectedLeads.add(leadKey);
       connectedCount++;
-      totalDuration += duration;
     } else {
       unconnectedCount++;
     }
