@@ -5,6 +5,8 @@ export interface ApiResponse<T = any> {
   success: boolean;
   error?: string;
   data?: T;
+  isUnauthorized?: boolean;
+  isRateLimited?: boolean;
   [key: string]: any;
 }
 
@@ -26,6 +28,78 @@ async function fetchWithTimeout(
   }
 }
 
+async function parseResponse(response: Response): Promise<ApiResponse> {
+  const text = await response.text();
+  let json: Record<string, any> = {};
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Non-JSON response
+    return {
+      success: false,
+      error: response.ok
+        ? 'Unexpected response from server.'
+        : `Server returned HTTP ${response.status} (${response.statusText || 'Error'}).`,
+      status: response.status,
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      success: false,
+      error: json.error || 'Session expired. Please log in again.',
+      isUnauthorized: true,
+      status: 401,
+    };
+  }
+
+  if (response.status === 429) {
+    return {
+      success: false,
+      error: json.error || 'Too many requests. Please wait a moment.',
+      isRateLimited: true,
+      status: 429,
+    };
+  }
+
+  if (!response.ok && !json.error) {
+    json.error = `Server returned HTTP ${response.status}`;
+  }
+
+  return {
+    ...json,
+    success: Boolean(json.success && response.ok),
+    status: response.status,
+  };
+}
+
+async function authenticatedRequest(url: string, options: RequestInit = {}): Promise<ApiResponse> {
+  const session = await authStorage.getSession();
+  if (!session?.token) {
+    return { success: false, error: 'Unauthenticated session', isUnauthorized: true };
+  }
+
+  try {
+    const response = await fetchWithTimeout(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+        ...(options.headers || {}),
+      },
+    });
+
+    const parsed = await parseResponse(response);
+    if (parsed.isUnauthorized) {
+      console.warn('[API] Received 401 Unauthorized, session may be invalid');
+    }
+    return parsed;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network request failed.';
+    return { success: false, error: message };
+  }
+}
+
 export const apiClient = {
   async login(identifier: string, password: string): Promise<ApiResponse> {
     try {
@@ -34,17 +108,7 @@ export const apiClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
       });
-      const text = await response.text();
-      try {
-        return JSON.parse(text);
-      } catch {
-        return {
-          success: false,
-          error: response.ok
-            ? 'Unexpected response from server.'
-            : `Server returned HTTP ${response.status} (${response.statusText || 'Error'}).`,
-        };
-      }
+      return await parseResponse(response);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Network request failed.';
       return { success: false, error: message };
@@ -52,113 +116,32 @@ export const apiClient = {
   },
 
   async getMe(): Promise<ApiResponse> {
-    const session = await authStorage.getSession();
-    if (!session?.token) {
-      return { success: false, error: 'Unauthenticated session' };
-    }
-    try {
-      const response = await fetchWithTimeout(API_ENDPOINTS.me, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.token}`,
-        },
-      });
-      const data = await response.json();
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network request failed.';
-      return { success: false, error: message };
-    }
+    return authenticatedRequest(API_ENDPOINTS.me, { method: 'GET' });
   },
 
   async getAssignedLeads(): Promise<ApiResponse> {
-    const session = await authStorage.getSession();
-    if (!session?.token) {
-      return { success: false, error: 'Unauthenticated session' };
-    }
-    try {
-      const response = await fetchWithTimeout(API_ENDPOINTS.leads, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.token}`,
-        },
-      });
-      const data = await response.json();
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network request failed.';
-      return { success: false, error: message };
-    }
+    return authenticatedRequest(API_ENDPOINTS.leads, { method: 'GET' });
   },
 
   async submitLeadDisposition(
     leadId: string,
     payload: { status: string; notes?: string; callDuration?: number }
   ): Promise<ApiResponse> {
-    const session = await authStorage.getSession();
-    if (!session?.token) {
-      return { success: false, error: 'Unauthenticated session' };
-    }
-    try {
-      const response = await fetchWithTimeout(API_ENDPOINTS.leadDisposition(leadId), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const data = await response.json();
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network request failed.';
-      return { success: false, error: message };
-    }
+    return authenticatedRequest(API_ENDPOINTS.leadDisposition(leadId), {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   },
 
   async syncCalls(calls: unknown[]): Promise<ApiResponse> {
-    const session = await authStorage.getSession();
-    if (!session?.token) {
-      return { success: false, error: 'Unauthenticated session' };
-    }
-    try {
-      const response = await fetchWithTimeout(API_ENDPOINTS.syncCalls, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.token}`,
-        },
-        body: JSON.stringify({ calls }),
-      });
-      const data = await response.json();
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network request failed.';
-      return { success: false, error: message };
-    }
+    return authenticatedRequest(API_ENDPOINTS.syncCalls, {
+      method: 'POST',
+      body: JSON.stringify({ calls }),
+    });
   },
 
   async getAnalytics(): Promise<ApiResponse> {
-    const session = await authStorage.getSession();
-    if (!session?.token) {
-      return { success: false, error: 'Unauthenticated session' };
-    }
-    try {
-      const response = await fetchWithTimeout(API_ENDPOINTS.analytics, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.token}`,
-        },
-      });
-      const data = await response.json();
-      return data;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Network request failed.';
-      return { success: false, error: message };
-    }
+    return authenticatedRequest(API_ENDPOINTS.analytics, { method: 'GET' });
   },
 };
 
