@@ -15,6 +15,7 @@ export interface CallOutcomeConfig {
 export interface CallRecord {
   id: string;
   employeeId?: string;
+  leadId?: string;
   phoneNumber: string;
   contactName?: string;
   callType: CallType;

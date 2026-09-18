@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ActivityIndicator, StatusBar, StyleSheet, View } from 'react-native';
 import { COLORS } from './src/theme/colors';
 import { useCallTracker } from './src/hooks/useCallTracker';
@@ -24,6 +24,11 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
 
   // If there's an automatic pending call from CallEnded or a manual selection
   const activeOutcomeCall = tracker.pendingOutcomeCall || manualOutcomeCall;
+
+  // Memoized refresh callback to prevent infinite re-render loops in child screens
+  const handleRefreshHistory = useCallback(async () => {
+    await tracker.loadCallHistory(true);
+  }, [tracker.loadCallHistory]);
 
   return (
     <View
@@ -57,7 +62,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
         permissionGranted={tracker.permissionGranted}
         statusMessage={tracker.statusMessage}
         onMakeCall={tracker.makeCall}
-        onRefreshHistory={() => tracker.loadCallHistory(true)}
+        onRefreshHistory={handleRefreshHistory}
         onRequestPermissions={tracker.requestPermissions}
         onSelectCall={(call: CallRecord) => setManualOutcomeCall(call)}
       />

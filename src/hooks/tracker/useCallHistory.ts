@@ -5,6 +5,27 @@ import { apiClient } from '../../services/apiClient';
 
 const { CallTracker } = NativeModules;
 
+interface RawCallData {
+  id?: string | number;
+  employeeId?: string;
+  phoneNumber?: string;
+  number?: string;
+  contactName?: string;
+  name?: string;
+  callType?: 'OUTGOING' | 'INCOMING' | 'MISSED' | 'REJECTED';
+  startedAt?: number | string;
+  date?: number | string;
+  endedAt?: number | string;
+  durationSeconds?: number | string;
+  duration?: number | string;
+  connected?: boolean;
+  outcomeId?: string;
+  outcomeLabel?: string;
+  notes?: string;
+  createdAt?: number | string;
+  type?: number | string;
+}
+
 export interface UseCallHistoryReturn {
   callHistory: CallRecord[];
   setCallHistory: React.Dispatch<React.SetStateAction<CallRecord[]>>;
@@ -28,7 +49,7 @@ export function useCallHistory(
     try {
       const res = await apiClient.getAnalytics();
       if (res.success && Array.isArray(res.allCalls)) {
-        const mapped: CallRecord[] = res.allCalls.map((item: any) => ({
+        const mapped: CallRecord[] = (res.allCalls as RawCallData[]).map((item) => ({
           id: String(item.id),
           employeeId: item.employeeId || 'EMP-1001',
           phoneNumber: item.phoneNumber || item.number || 'Unknown',
@@ -59,14 +80,15 @@ export function useCallHistory(
         }
         return;
       }
-    } catch (err: any) {
-      console.log('Backend sync in loadAppCalls failed, falling back to local:', err?.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log('Backend sync in loadAppCalls failed, falling back to local:', message);
     }
 
     // Fallback: Read local device cache if offline
     try {
       if (CallTracker?.getAppCalls) {
-        const rawAppCalls: any[] = await CallTracker.getAppCalls();
+        const rawAppCalls = (await CallTracker.getAppCalls()) as RawCallData[];
         if (Array.isArray(rawAppCalls)) {
           const mapped: CallRecord[] = rawAppCalls.map((item, index) => {
             const id = String(item.id || `app_${item.date || Date.now()}_${index}`);
@@ -101,8 +123,9 @@ export function useCallHistory(
           setAppCalls(mapped);
         }
       }
-    } catch (err: any) {
-      console.log('Error loading app calls fallback:', err?.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.log('Error loading app calls fallback:', message);
     }
   }, [getOutcomeForCall]);
 
@@ -113,8 +136,6 @@ export function useCallHistory(
         if (showIndicator) {
           setIsLoadingHistory(true);
         }
-        // Always sync app calls concurrently
-        loadAppCalls();
 
         // When showing indicator (e.g. refresh), enforce a smooth minimum delay
         // to prevent instant flickering and accommodate future server latency
@@ -122,12 +143,17 @@ export function useCallHistory(
           ? new Promise<void>(resolve => setTimeout(() => resolve(), 500))
           : Promise.resolve();
 
-        let rawHistoryPromise: Promise<any[]> = Promise.resolve([]);
+        let rawHistoryPromise: Promise<RawCallData[]> = Promise.resolve([]);
         if (CallTracker?.getCallHistory) {
           rawHistoryPromise = CallTracker.getCallHistory(200);
         }
 
-        const [rawHistory] = await Promise.all([rawHistoryPromise, minDelay]);
+        // Authoritative sync: Await both backend DB calls (appCalls) and native device history
+        const [, rawHistory] = await Promise.all([
+          loadAppCalls(),
+          rawHistoryPromise,
+          minDelay,
+        ]);
         if (Array.isArray(rawHistory)) {
           const mapped: CallRecord[] = rawHistory.map((item, index) => {
             const rawType = Number(item.type) || 2;
@@ -172,8 +198,9 @@ export function useCallHistory(
             onLatestCallFound?.(mapped[0]);
           }
         }
-      } catch (error: any) {
-        console.log('Error fetching call history:', error?.message);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.log('Error fetching call history:', message);
       } finally {
         setIsLoadingHistory(false);
       }

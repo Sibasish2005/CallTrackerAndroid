@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Linking,
-
+  NativeModules,
   RefreshControl,
   StyleSheet,
   Text,
@@ -17,6 +17,9 @@ import { Icon } from '../components/common/Icon';
 import { Card } from '../components/common/Card';
 import { apiClient } from '../services/apiClient';
 import { LeadDispositionModal, LeadItem } from '../components/leads/LeadDispositionModal';
+
+const { CallTracker } = NativeModules;
+const CACHED_LEADS_KEY = 'heeyaku_cached_leads';
 
 interface LeadsScreenProps {
   onMakeCall: (phoneNumber: string, contactName?: string) => void;
@@ -33,29 +36,58 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
 
   // Modal State for KPI
   const [activeDispositionLead, setActiveDispositionLead] = useState<LeadItem | null>(null);
+  const isFetchingRef = useRef(false);
 
-  const fetchLeads = useCallback(async (isRefresh = false) => {
+  // 1. Instant Cache Hydration on Mount
+  useEffect(() => {
+    async function loadCachedLeads() {
+      try {
+        if (CallTracker?.getItem) {
+          const cached = await CallTracker.getItem(CACHED_LEADS_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setLeads(parsed);
+              setLoading(false);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error reading cached leads:', e);
+      }
+    }
+    loadCachedLeads();
+  }, []);
+
+  const fetchLeads = useCallback(async (isRefresh = false, isInitial = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (isInitial && leads.length === 0) setLoading(true);
 
     try {
       const res = await apiClient.getAssignedLeads();
       if (res.success && Array.isArray(res.leads)) {
         setLeads(res.leads);
+        if (CallTracker?.setItem) {
+          CallTracker.setItem(CACHED_LEADS_KEY, JSON.stringify(res.leads)).catch(() => {});
+        }
       }
     } catch (err) {
       console.warn('Failed to load assigned leads:', err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
+      isFetchingRef.current = false;
     }
-  }, []);
+  }, [leads.length]);
 
   useEffect(() => {
-    fetchLeads();
+    fetchLeads(false, true);
     const interval = setInterval(() => {
-      fetchLeads(false);
-    }, 4000);
+      fetchLeads(false, false);
+    }, 20000);
     return () => clearInterval(interval);
   }, [fetchLeads]);
 

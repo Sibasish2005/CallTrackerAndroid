@@ -8,10 +8,28 @@ export interface ApiResponse<T = any> {
   [key: string]: any;
 }
 
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 12000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export const apiClient = {
   async login(identifier: string, password: string): Promise<ApiResponse> {
     try {
-      const response = await fetch(API_ENDPOINTS.login, {
+      const response = await fetchWithTimeout(API_ENDPOINTS.login, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
@@ -27,8 +45,9 @@ export const apiClient = {
             : `Server returned HTTP ${response.status} (${response.statusText || 'Error'}).`,
         };
       }
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 
@@ -38,7 +57,7 @@ export const apiClient = {
       return { success: false, error: 'Unauthenticated session' };
     }
     try {
-      const response = await fetch(API_ENDPOINTS.me, {
+      const response = await fetchWithTimeout(API_ENDPOINTS.me, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -47,8 +66,9 @@ export const apiClient = {
       });
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 
@@ -58,7 +78,7 @@ export const apiClient = {
       return { success: false, error: 'Unauthenticated session' };
     }
     try {
-      const response = await fetch(API_ENDPOINTS.leads, {
+      const response = await fetchWithTimeout(API_ENDPOINTS.leads, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -67,8 +87,9 @@ export const apiClient = {
       });
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 
@@ -81,7 +102,7 @@ export const apiClient = {
       return { success: false, error: 'Unauthenticated session' };
     }
     try {
-      const response = await fetch(API_ENDPOINTS.leadDisposition(leadId), {
+      const response = await fetchWithTimeout(API_ENDPOINTS.leadDisposition(leadId), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,18 +112,19 @@ export const apiClient = {
       });
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 
-  async syncCalls(calls: any[]): Promise<ApiResponse> {
+  async syncCalls(calls: unknown[]): Promise<ApiResponse> {
     const session = await authStorage.getSession();
     if (!session?.token) {
       return { success: false, error: 'Unauthenticated session' };
     }
     try {
-      const response = await fetch(API_ENDPOINTS.syncCalls, {
+      const response = await fetchWithTimeout(API_ENDPOINTS.syncCalls, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,8 +134,9 @@ export const apiClient = {
       });
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 
@@ -123,7 +146,7 @@ export const apiClient = {
       return { success: false, error: 'Unauthenticated session' };
     }
     try {
-      const response = await fetch(API_ENDPOINTS.analytics, {
+      const response = await fetchWithTimeout(API_ENDPOINTS.analytics, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -132,8 +155,9 @@ export const apiClient = {
       });
       const data = await response.json();
       return data;
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Network request failed.' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network request failed.';
+      return { success: false, error: message };
     }
   },
 };

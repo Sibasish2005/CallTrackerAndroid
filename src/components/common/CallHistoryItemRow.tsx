@@ -20,7 +20,7 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
 }) => {
   const number = item.phoneNumber || item.number || 'Unknown';
   const name = item.contactName || item.name || '';
-  const date = item.startedAt || item.date || Date.now();
+  const date = item.startedAt || item.date || 0;
   const duration = item.durationSeconds ?? item.duration ?? 0;
   const isConnected = item.connected ?? (duration > 0 && item.type !== 3 && item.type !== 5);
   const isIncoming = item.type === 1 || item.callType === 'INCOMING';
@@ -75,7 +75,7 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
         </View>
 
         {/* Date / Timestamp */}
-        <Text style={styles.dateText}>{formatRelativeDate(date)}</Text>
+        <Text style={styles.dateText}>{date ? formatRelativeDate(date) : ''}</Text>
       </TouchableOpacity>
 
       {/* Independent 1-Tap Quick Dial Button: Clean sibling without touch responder conflict */}

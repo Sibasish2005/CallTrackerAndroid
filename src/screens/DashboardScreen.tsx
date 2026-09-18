@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -29,7 +29,7 @@ interface DashboardScreenProps {
   onNavigateToCalls: () => void;
   onQuickCall: (number: string, name?: string) => void;
   onSelectCall: (call: CallRecord) => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   refreshing?: boolean;
 }
 
@@ -47,9 +47,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onRefresh,
   refreshing = false,
 }) => {
+  const [localRefreshing, setLocalRefreshing] = useState(false);
   const isOffhook = callState === 'OFFHOOK';
   const isRinging = callState === 'RINGING';
   const hasActiveCall = isOffhook || isRinging;
+
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setLocalRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (e) {
+      console.log('Error refreshing dashboard:', e);
+    } finally {
+      setLocalRefreshing(false);
+    }
+  }, [onRefresh]);
 
   return (
     <ScrollView
@@ -59,8 +72,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       refreshControl={
         onRefresh ? (
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={localRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#38BDF8']}
+            progressBackgroundColor="#1E293B"
             tintColor="#38BDF8"
           />
         ) : undefined
@@ -103,7 +118,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       {/* Recent Activity from Today */}
       <View style={styles.recentsHeaderRow}>
-        <Text style={styles.sectionHeader}>TODAY'S CALL ACTIVITY</Text>
+        <Text style={styles.sectionHeader}>{"TODAY'S CALL ACTIVITY"}</Text>
         <TouchableOpacity activeOpacity={0.7} onPress={onNavigateToCalls}>
           <Text style={styles.viewAllText}>
             View All ({recentCalls.length}) →

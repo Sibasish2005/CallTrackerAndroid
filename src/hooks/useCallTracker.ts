@@ -57,7 +57,9 @@ export function useCallTracker() {
   } = useCallHistory(getOutcomeForCall, handleLatestCallFound);
 
   const loadCallHistoryRef = useRef(loadCallHistory);
-  loadCallHistoryRef.current = loadCallHistory;
+  useEffect(() => {
+    loadCallHistoryRef.current = loadCallHistory;
+  });
 
   // 4. Filtering & Search (strictly on appCalls as per Option A)
   const {
@@ -71,42 +73,44 @@ export function useCallTracker() {
   // 5. Telephony state, dialing & events
   // 5. Telephony state, dialing & events
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
-  onCallEndedEventRef.current = (completedRecord: CallRecord) => {
-    // 1. Update local callHistory
-    setCallHistory(prev => {
-      const filtered = prev.filter(c => c.id !== completedRecord.id);
-      return [completedRecord, ...filtered.slice(0, 199)];
-    });
-
-    // 2. IMMEDIATE BACKEND PERSISTENCE:
-    // Every call (whether connected = true or false) immediately reaches the backend DB
-    const syncPayload = {
-      id: completedRecord.id,
-      phoneNumber: completedRecord.phoneNumber || completedRecord.number,
-      contactName: completedRecord.contactName || completedRecord.name,
-      callType: completedRecord.callType || 'OUTGOING',
-      durationSeconds: completedRecord.durationSeconds ?? completedRecord.duration ?? 0,
-      connected: completedRecord.connected,
-      outcomeId: completedRecord.outcomeId,
-      outcomeLabel: completedRecord.outcomeLabel,
-      notes: completedRecord.notes,
-      startedAt: completedRecord.startedAt || completedRecord.date,
-      endedAt: completedRecord.endedAt,
-    };
-    apiClient.syncCalls([syncPayload]).catch((e: any) => console.log('Immediate call sync err:', e));
-
-    // 3. CRITICAL: Strictly and ONLY if it was initiated from the HEEYAKU app,
-    // update appCalls and show the mandatory KPI outcome modal!
-    if (completedRecord.isAppInitiated) {
-      setAppCalls(prev => {
+  useEffect(() => {
+    onCallEndedEventRef.current = (completedRecord: CallRecord) => {
+      // 1. Update local callHistory
+      setCallHistory(prev => {
         const filtered = prev.filter(c => c.id !== completedRecord.id);
-        return [completedRecord, ...filtered];
+        return [completedRecord, ...filtered.slice(0, 199)];
       });
 
-      // Set the popup modal target (mandatory KPI)
-      setPendingOutcomeCall(completedRecord);
-    }
-  };
+      // 2. IMMEDIATE BACKEND PERSISTENCE:
+      // Every call (whether connected = true or false) immediately reaches the backend DB
+      const syncPayload = {
+        id: completedRecord.id,
+        phoneNumber: completedRecord.phoneNumber || completedRecord.number,
+        contactName: completedRecord.contactName || completedRecord.name,
+        callType: completedRecord.callType || 'OUTGOING',
+        durationSeconds: completedRecord.durationSeconds ?? completedRecord.duration ?? 0,
+        connected: completedRecord.connected,
+        outcomeId: completedRecord.outcomeId,
+        outcomeLabel: completedRecord.outcomeLabel,
+        notes: completedRecord.notes,
+        startedAt: completedRecord.startedAt || completedRecord.date,
+        endedAt: completedRecord.endedAt,
+      };
+      apiClient.syncCalls([syncPayload]).catch((e: unknown) => console.log('Immediate call sync err:', e));
+
+      // 3. CRITICAL: Strictly and ONLY if it was initiated from the HEEYAKU app,
+      // update appCalls and show the mandatory KPI outcome modal!
+      if (completedRecord.isAppInitiated) {
+        setAppCalls(prev => {
+          const filtered = prev.filter(c => c.id !== completedRecord.id);
+          return [completedRecord, ...filtered];
+        });
+
+        // Set the popup modal target (mandatory KPI)
+        setPendingOutcomeCall(completedRecord);
+      }
+    };
+  });
   const handleCallEndedEvent = useCallback((completedRecord: CallRecord) => {
     onCallEndedEventRef.current(completedRecord);
   }, []);
@@ -135,9 +139,11 @@ export function useCallTracker() {
   });
 
   // Attach setLastCall to onLatestCallFoundRef
-  onLatestCallFoundRef.current = (latest: CallRecord) => {
-    setLastCall(prev => prev ?? latest);
-  };
+  useEffect(() => {
+    onLatestCallFoundRef.current = (latest: CallRecord) => {
+      setLastCall(prev => prev ?? latest);
+    };
+  });
 
   // Request permissions wrapper: automatically starts listener and loads history on grant
   const requestPermissions = useCallback(async () => {
@@ -257,13 +263,14 @@ export function useCallTracker() {
         const status = await checkPermissions();
         if (status === 'granted') {
           await startCallListener();
-          await loadCallHistoryRef.current(true);
+          await loadCallHistoryRef.current(false);
           setStatusMessage('System active & tracking');
         } else {
           await requestPermissions();
         }
-      } catch (err: any) {
-        setStatusMessage(`Init warning: ${err?.message}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        setStatusMessage(`Init warning: ${message}`);
       }
     };
 
@@ -297,7 +304,7 @@ export function useCallTracker() {
                 startedAt: c.startedAt || c.date,
                 endedAt: c.endedAt,
               }));
-              apiClient.syncCalls(payload).catch((e: any) => console.log('Sync err:', e));
+              apiClient.syncCalls(payload).catch((e: unknown) => console.log('Sync err:', e));
             }
           }
         }
@@ -309,11 +316,18 @@ export function useCallTracker() {
     };
   }, [appCalls]);
 
-  // Periodic real-time synchronization with authoritative database every 4 seconds
+  // Periodic background synchronization with authoritative database every 25 seconds
+  const isPeriodicSyncingRef = useRef(false);
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadCallHistoryRef.current(false);
-    }, 4000);
+    const interval = setInterval(async () => {
+      if (isPeriodicSyncingRef.current) return;
+      isPeriodicSyncingRef.current = true;
+      try {
+        await loadCallHistoryRef.current(false);
+      } finally {
+        isPeriodicSyncingRef.current = false;
+      }
+    }, 25000);
 
     return () => clearInterval(interval);
   }, []);

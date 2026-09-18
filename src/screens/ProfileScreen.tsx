@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ActivityIndicator,
+  NativeModules,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -13,7 +13,10 @@ import { Avatar } from '../components/common/Avatar';
 import { HeeyakuLogo } from '../components/common/HeeyakuLogo';
 import { apiClient } from '../services/apiClient';
 import { authStorage, EmployeeProfile } from '../services/authStorage';
-import { COLORS, RADII, SPACING } from '../theme/colors';
+import { COLORS, RADII } from '../theme/colors';
+
+const { CallTracker } = NativeModules;
+const CACHED_STATS_KEY = 'heeyaku_cached_stats';
 
 interface ProfileScreenProps {
   permissionGranted: boolean;
@@ -37,39 +40,64 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     contactedToday: 0,
     convertedTotal: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const isFetchingRef = useRef(false);
+
+  // 1. Instant Cache Hydration on Mount
+  useEffect(() => {
+    async function loadCachedProfileAndStats() {
+      try {
+        const cached = await authStorage.getSession();
+        if (cached?.employee) {
+          setProfile(cached.employee);
+        }
+        if (CallTracker?.getItem) {
+          const cachedStatsRaw = await CallTracker.getItem(CACHED_STATS_KEY);
+          if (cachedStatsRaw) {
+            const parsed = JSON.parse(cachedStatsRaw);
+            if (parsed && typeof parsed === 'object') {
+              setStats(parsed);
+            }
+          }
+        }
+      } catch (e) {
+        console.log('Error reading cached profile/stats:', e);
+      }
+    }
+    loadCachedProfileAndStats();
+  }, []);
 
   const loadBackendProfile = useCallback(async (isRefresh = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
 
     try {
-      // 1. Initial load from local cached session
-      const cached = await authStorage.getSession();
-      if (cached?.employee) {
-        setProfile(cached.employee);
-      }
-
-      // 2. Fetch fresh details & live stats from backend
       const res = await apiClient.getMe();
       if (res.success && res.employee) {
         setProfile(res.employee);
-        if (res.stats) setStats(res.stats);
+        if (res.stats) {
+          setStats(res.stats);
+          if (CallTracker?.setItem) {
+            CallTracker.setItem(CACHED_STATS_KEY, JSON.stringify(res.stats)).catch(() => {});
+          }
+        }
       }
     } catch (e) {
       console.warn('Failed to load fresh employee profile:', e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
   useEffect(() => {
-    loadBackendProfile();
+    loadBackendProfile(false);
     const interval = setInterval(() => {
       loadBackendProfile(false);
-    }, 5000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [loadBackendProfile]);
 
@@ -113,17 +141,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       <Card variant="default" style={styles.card}>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{loading ? '-' : stats.totalAssigned}</Text>
+            <Text style={styles.statNumber}>{stats.totalAssigned}</Text>
             <Text style={styles.statLabel}>Assigned Leads</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{loading ? '-' : stats.contactedToday}</Text>
+            <Text style={styles.statNumber}>{stats.contactedToday}</Text>
             <Text style={styles.statLabel}>Contacted Today</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={[styles.statNumber, { color: '#22C55E' }]}>{loading ? '-' : stats.convertedTotal}</Text>
+            <Text style={[styles.statNumber, { color: '#22C55E' }]}>{stats.convertedTotal}</Text>
             <Text style={styles.statLabel}>Converted</Text>
           </View>
         </View>

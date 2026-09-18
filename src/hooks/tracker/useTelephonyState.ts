@@ -71,9 +71,10 @@ export function useTelephonyState({
         setIsListening(true);
         onStatusMessage('Telephony callback registered');
       }
-    } catch (error: any) {
-      console.log('Start listener error:', error?.message);
-      onStatusMessage(`Listener error: ${error?.message || error}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log('Start listener error:', message);
+      onStatusMessage(`Listener error: ${message}`);
     }
   }, [onStatusMessage]);
 
@@ -201,9 +202,10 @@ export function useTelephonyState({
         const res = await CallTracker.startCall(target);
         onStatusMessage(`Call initiated: ${res}`);
       }
-    } catch (error: any) {
-      console.error('Call failed:', error);
-      onStatusMessage(`Call error: ${error?.message || error}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Call failed:', message);
+      onStatusMessage(`Call error: ${message}`);
     }
   };
 
@@ -214,7 +216,7 @@ export function useTelephonyState({
     isCallActive,
     phoneNumber,
     setPhoneNumber,
-    activeNumber: activeNumber || activeNumberRef.current,
+    activeNumber,
     activeContactName,
     currentDuration,
     lastCall,

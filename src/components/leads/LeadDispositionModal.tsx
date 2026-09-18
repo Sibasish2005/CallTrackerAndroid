@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -53,14 +53,22 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  if (!lead) return null;
-
-  const [selectedStatus, setSelectedStatus] = useState<string>(
-    lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'CONTACTED' : lead.status
-  );
+  const [selectedStatus, setSelectedStatus] = useState<string>('CONTACTED');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (lead) {
+      setSelectedStatus(
+        lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'CONTACTED' : lead.status
+      );
+      setNotes('');
+      setError(null);
+    }
+  }, [lead]);
+
+  if (!visible || !lead) return null;
 
   const handleSubmit = async () => {
     setError(null);
@@ -94,8 +102,9 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
           }
         });
       }
-    } catch (err: any) {
-      setError(err.message || 'Server connection error.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Server connection error.';
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -123,7 +132,7 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
           {thenOpenWhatsApp && (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
-                ⚠️ Please log discussion outcome & KPI to the database before redirecting to WhatsApp.
+              Please log discussion outcome to the database before redirecting to WhatsApp.
               </Text>
             </View>
           )}

@@ -16,7 +16,7 @@ export const TodayHeroCard: React.FC<TodayHeroCardProps> = ({ metrics }) => {
     <View style={styles.heroCard}>
       {/* Top Header Row */}
       <View style={styles.heroTopRow}>
-        <Text style={styles.heroPreTitle}>Today's schedule</Text>
+        <Text style={styles.heroPreTitle}>{"Today's schedule"}</Text>
 
         {/* Right indicator: Pill badge + connector line + vertical progress bar */}
         <View style={styles.verticalBarGroup}>

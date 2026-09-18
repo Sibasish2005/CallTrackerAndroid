@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   BackHandler,
   RefreshControl,
@@ -9,9 +9,6 @@ import {
   View,
 } from 'react-native';
 import { CallRecord, EmployeeMetrics } from '../types';
-import { Card } from '../components/common/Card';
-import { Badge } from '../components/common/Badge';
-import { ProgressBar } from '../components/common/ProgressBar';
 import { DEFAULT_CALL_OUTCOMES } from '../config/outcomes';
 import { formatVerboseDuration } from '../utils/formatters';
 import { getMonthRange } from '../utils/dateRange';
@@ -25,19 +22,22 @@ interface AnalyticsScreenProps {
   appCalls?: CallRecord[];
 }
 
+type PeriodTab = 'today' | 'month' | 'lifetime';
+
 export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
   todayMetrics: propTodayMetrics,
   todayCalls: propTodayCalls,
   lifetimeMetrics: propLifetimeMetrics,
   appCalls: propAppCalls = [],
 }) => {
+  const [selectedTab, setSelectedTab] = useState<PeriodTab>('today');
   const [backendTodayMetrics, setBackendTodayMetrics] = useState<EmployeeMetrics | null>(null);
   const [backendLifetimeMetrics, setBackendLifetimeMetrics] = useState<EmployeeMetrics | null>(null);
   const [backendTodayCalls, setBackendTodayCalls] = useState<CallRecord[] | null>(null);
   const [backendAllCalls, setBackendAllCalls] = useState<CallRecord[] | null>(null);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [isFromBackend, setIsFromBackend] = useState<boolean>(false);
 
+  // Manual pull-to-refresh (no aggressive 4s interval)
   const fetchBackendAnalytics = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
@@ -47,33 +47,25 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
         if (res.lifetimeMetrics) setBackendLifetimeMetrics(res.lifetimeMetrics);
         if (res.todayCalls) setBackendTodayCalls(res.todayCalls);
         if (res.allCalls) setBackendAllCalls(res.allCalls);
-        setIsFromBackend(true);
       }
     } catch (e) {
       console.warn('Backend analytics fetch error:', e);
     } finally {
-      setRefreshing(false);
+      if (isRefresh) setRefreshing(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchBackendAnalytics();
-    const interval = setInterval(() => {
-      fetchBackendAnalytics(false);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [fetchBackendAnalytics]);
 
   const todayMetrics = backendTodayMetrics !== null ? backendTodayMetrics : propTodayMetrics;
   const lifetimeMetrics = backendLifetimeMetrics !== null ? backendLifetimeMetrics : propLifetimeMetrics;
   const todayCalls = backendTodayCalls !== null ? backendTodayCalls : propTodayCalls;
   const appCalls = backendAllCalls !== null ? backendAllCalls : propAppCalls;
+
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentDate.getMonth());
   const [showDailyBreakdown, setShowDailyBreakdown] = useState<boolean>(false);
 
-  // Handle hardware back button on Android
+  // Android hardware back button handler for daily subpage
   useEffect(() => {
     if (!showDailyBreakdown) return;
     const backAction = () => {
@@ -84,35 +76,40 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
     return () => subscription.remove();
   }, [showDailyBreakdown]);
 
-  // Monthly Date Range & Valid Days (No future days)
-  const monthData = getMonthRange(selectedYear, selectedMonthIndex);
+  // Monthly Date Range & Valid Days
+  const monthData = useMemo(
+    () => getMonthRange(selectedYear, selectedMonthIndex),
+    [selectedYear, selectedMonthIndex]
+  );
 
-  // Filter calls for the selected month (strictly HEEYAKU app calls)
-  const monthCalls = appCalls.filter(call => {
-    const timestamp = Number(call.startedAt || call.date || 0);
-    return timestamp >= monthData.range.startMs && timestamp <= monthData.range.endMs;
-  });
+  const monthCalls = useMemo(() => {
+    return appCalls.filter((call) => {
+      const timestamp = Number(call.startedAt || call.date || 0);
+      return timestamp >= monthData.range.startMs && timestamp <= monthData.range.endMs;
+    });
+  }, [appCalls, monthData]);
 
-  const monthMetrics = calculateMetrics(monthCalls);
+  const monthMetrics = useMemo(() => calculateMetrics(monthCalls), [monthCalls]);
 
-  // Group month calls by day
-  const callsByDay = new Map<number, CallRecord[]>();
-  for (const call of monthCalls) {
-    const callDate = new Date(Number(call.startedAt || call.date || 0));
-    const day = callDate.getDate();
-    if (!callsByDay.has(day)) {
-      callsByDay.set(day, []);
+  const callsByDay = useMemo(() => {
+    const map = new Map<number, CallRecord[]>();
+    for (const call of monthCalls) {
+      const callDate = new Date(Number(call.startedAt || call.date || 0));
+      const day = callDate.getDate();
+      if (!map.has(day)) {
+        map.set(day, []);
+      }
+      map.get(day)!.push(call);
     }
-    callsByDay.get(day)!.push(call);
-  }
+    return map;
+  }, [monthCalls]);
 
-  // Month navigation handlers
   const handlePrevMonth = () => {
     if (selectedMonthIndex === 0) {
       setSelectedMonthIndex(11);
-      setSelectedYear(y => y - 1);
+      setSelectedYear((y) => y - 1);
     } else {
-      setSelectedMonthIndex(m => m - 1);
+      setSelectedMonthIndex((m) => m - 1);
     }
   };
 
@@ -121,13 +118,13 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
       selectedYear > currentDate.getFullYear() ||
       (selectedYear === currentDate.getFullYear() && selectedMonthIndex >= currentDate.getMonth());
 
-    if (isCurrentOrFuture) return; // Prevent selecting future months
+    if (isCurrentOrFuture) return;
 
     if (selectedMonthIndex === 11) {
       setSelectedMonthIndex(0);
-      setSelectedYear(y => y + 1);
+      setSelectedYear((y) => y + 1);
     } else {
-      setSelectedMonthIndex(m => m + 1);
+      setSelectedMonthIndex((m) => m + 1);
     }
   };
 
@@ -135,67 +132,48 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
     selectedYear === currentDate.getFullYear() &&
     selectedMonthIndex >= currentDate.getMonth();
 
+  // Pick active metrics based on selected tab
+  const activeMetrics =
+    selectedTab === 'today'
+      ? todayMetrics
+      : selectedTab === 'month'
+      ? monthMetrics
+      : lifetimeMetrics;
+
+  const totalCallsCount = activeMetrics.totalAttempts;
+
+  // Day-by-day subpage
   if (showDailyBreakdown) {
     return (
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}>
-        {/* Navigation & Return Header */}
         <View style={styles.subpageHeader}>
           <TouchableOpacity
             activeOpacity={0.7}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             onPress={() => setShowDailyBreakdown(false)}
             style={styles.backButton}>
-            <Text style={styles.backButtonArrow}>←</Text>
-            <Text style={styles.backButtonText}>Back to Analytics</Text>
+            <Text style={styles.backButtonText}>← Overview</Text>
           </TouchableOpacity>
-          <Badge label={monthData.monthLabel} variant="outline" size="sm" />
+          <Text style={styles.subpageMonthTag}>{monthData.monthLabel}</Text>
         </View>
 
-        {/* Subpage Title Block */}
-        <View style={styles.subpageTitleBlock}>
-          <Text style={styles.title}>Day-by-Day Breakdown</Text>
-          <Text style={styles.subtitle}>
-            Daily calling activity & metrics for {monthData.monthLabel}
-          </Text>
-        </View>
+        <Text style={styles.pageTitle}>Daily Calling Activity</Text>
+        <Text style={styles.pageSubtitle}>
+          Breakdown of calls logged during {monthData.monthLabel}
+        </Text>
 
-        {/* Month Summary Bar */}
-        <Card variant="default" style={styles.monthSummaryMiniCard}>
-          <View style={styles.monthSummaryRow}>
-            <View style={styles.monthSummaryItem}>
-              <Text style={styles.monthSummaryLabel}>Total Calls</Text>
-              <Text style={styles.monthSummaryValue}>{monthMetrics.totalAttempts}</Text>
-            </View>
-            <View style={styles.monthSummaryItem}>
-              <Text style={styles.monthSummaryLabel}>Connected</Text>
-              <Text style={styles.monthSummaryValue}>{monthMetrics.totalConnected}</Text>
-            </View>
-            <View style={styles.monthSummaryItem}>
-              <Text style={styles.monthSummaryLabel}>Not Connected</Text>
-              <Text style={styles.monthSummaryValueMuted}>{monthMetrics.totalUnconnected}</Text>
-            </View>
-            <View style={styles.monthSummaryItem}>
-              <Text style={styles.monthSummaryLabel}>Talk Time</Text>
-              <Text style={styles.monthSummaryValue}>
-                {formatVerboseDuration(monthMetrics.totalDurationSeconds)}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Day-by-Day List */}
-        <Text style={styles.subSectionTitle}>DAILY ACTIVITY BREAKDOWN</Text>
-        <View style={styles.daysList}>
-          {monthData.days.slice().reverse().map(bucket => {
+        <View style={styles.breakdownList}>
+          {monthData.days.map((bucket) => {
             const dayCalls = callsByDay.get(bucket.dayNumber) || [];
             const dayMetrics = calculateMetrics(dayCalls);
             const hasCalls = dayCalls.length > 0;
+
             return (
               <View
-                key={bucket.dayNumber}
+                key={bucket.dateString}
                 style={[
                   styles.dayRow,
                   bucket.isToday && styles.dayRowToday,
@@ -208,7 +186,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
                       bucket.isToday && styles.dayDateToday,
                       !hasCalls && styles.dayDateTextMuted,
                     ]}>
-                    {bucket.dateString} {bucket.isToday ? '(Today)' : ''}
+                    {bucket.dateString} {bucket.isToday ? '• Today' : ''}
                   </Text>
                 </View>
 
@@ -218,8 +196,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
                       styles.dayCallsText,
                       !hasCalls && styles.dayCallsTextMuted,
                     ]}>
-                    {dayCalls.length} {dayCalls.length === 1 ? 'call' : 'calls'} •{' '}
-                    {dayMetrics.totalConnected} connected
+                    {dayCalls.length} {dayCalls.length === 1 ? 'call' : 'calls'} ({dayMetrics.totalConnected} connected)
                   </Text>
                   <Text style={styles.dayTalkTimeText}>
                     {formatVerboseDuration(dayMetrics.totalDurationSeconds)}
@@ -230,12 +207,11 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
           })}
         </View>
 
-        {/* Bottom Return Button */}
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => setShowDailyBreakdown(false)}
-          style={styles.bottomReturnButton}>
-          <Text style={styles.bottomReturnButtonText}>← Return to Overview</Text>
+          style={styles.returnButton}>
+          <Text style={styles.returnButtonText}>Back to Overview</Text>
         </TouchableOpacity>
       </ScrollView>
     );
@@ -253,265 +229,174 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
           tintColor="#38BDF8"
         />
       }>
-      {/* Page Header */}
+      {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Performance Analytics</Text>
-          <Text style={styles.subtitle}>
-            Daily, monthly and career calling reports
-          </Text>
-        </View>
-        <Badge
-          label={isFromBackend ? 'Cloud DB' : 'Realtime'}
-          variant={isFromBackend ? 'glow' : 'outline'}
-          size="sm"
-        />
+        <Text style={styles.pageTitle}>Analytics</Text>
+        <Text style={styles.pageSubtitle}>Calling performance and outcomes</Text>
       </View>
 
-      {/* ========================================================================= */}
-      {/* SECTION 1: DAILY PERFORMANCE (TODAY)                                     */}
-      {/* ========================================================================= */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>1. DAILY PERFORMANCE (TODAY)</Text>
-        <Badge label={`${todayCalls.length} calls`} variant="subtle" size="sm" />
-      </View>
-
-      <Card variant="default" style={styles.card}>
-        <View style={styles.statsGrid}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Calls Made</Text>
-            <Text style={styles.statValue}>{todayMetrics.totalAttempts}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Connected</Text>
-            <Text style={styles.statValue}>{todayMetrics.totalConnected}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Not Connected</Text>
-            <Text style={styles.statValueMuted}>{todayMetrics.totalUnconnected}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Connection Rate</Text>
-            <Text style={styles.statValueAccent}>{todayMetrics.connectionRatePercent}%</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.durationRow}>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Total Talk Time</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(todayMetrics.totalDurationSeconds)}
-            </Text>
-          </View>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Average Duration</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(todayMetrics.averageDurationSeconds)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Today's Call Results Distribution */}
-        <Text style={styles.subSectionTitle}>TODAY'S CALL RESULTS</Text>
-        {DEFAULT_CALL_OUTCOMES.map(outcome => {
-          const count = todayMetrics.outcomeDistribution[outcome.id] || 0;
-          const pct = todayMetrics.totalAttempts > 0
-            ? Math.round((count / todayMetrics.totalAttempts) * 100)
-            : 0;
-          return (
-            <View key={outcome.id} style={styles.outcomeRow}>
-              <View style={styles.outcomeHeader}>
-                <View style={styles.outcomeNameRow}>
-                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
-                  <Text style={styles.outcomeLabel}>{outcome.label}</Text>
-                </View>
-                <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
-              </View>
-              <ProgressBar progress={pct} color={outcome.color} height={4} />
-            </View>
-          );
-        })}
-      </Card>
-
-      {/* ========================================================================= */}
-      {/* SECTION 2: MONTHLY PERFORMANCE                                           */}
-      {/* ========================================================================= */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>2. MONTHLY PERFORMANCE</Text>
-      </View>
-
-      {/* Month Selector Bar */}
-      <View style={styles.monthSelectorRow}>
+      {/* Segmented Period Switcher */}
+      <View style={styles.tabBar}>
         <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handlePrevMonth}
-          style={styles.monthArrowButton}>
-          <Text style={styles.monthArrowText}>‹</Text>
+          activeOpacity={0.8}
+          onPress={() => setSelectedTab('today')}
+          style={[styles.tabItem, selectedTab === 'today' && styles.tabItemActive]}>
+          <Text style={[styles.tabText, selectedTab === 'today' && styles.tabTextActive]}>
+            Today
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.monthSelectorLabel}>{monthData.monthLabel}</Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => setSelectedTab('month')}
+          style={[styles.tabItem, selectedTab === 'month' && styles.tabItemActive]}>
+          <Text style={[styles.tabText, selectedTab === 'month' && styles.tabTextActive]}>
+            This Month
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleNextMonth}
-          disabled={isNextDisabled}
-          style={[styles.monthArrowButton, isNextDisabled && styles.monthArrowDisabled]}>
-          <Text style={[styles.monthArrowText, isNextDisabled && styles.monthArrowTextDisabled]}>
-            ›
+          activeOpacity={0.8}
+          onPress={() => setSelectedTab('lifetime')}
+          style={[styles.tabItem, selectedTab === 'lifetime' && styles.tabItemActive]}>
+          <Text style={[styles.tabText, selectedTab === 'lifetime' && styles.tabTextActive]}>
+            All Time
           </Text>
         </TouchableOpacity>
       </View>
 
-      <Card variant="default" style={styles.card}>
+      {/* Month Navigator (Visible only in month tab) */}
+      {selectedTab === 'month' && (
+        <View style={styles.monthNavRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handlePrevMonth}
+            style={styles.monthNavButton}>
+            <Text style={styles.monthNavArrow}>‹</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.monthNavLabel}>{monthData.monthLabel}</Text>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleNextMonth}
+            disabled={isNextDisabled}
+            style={[styles.monthNavButton, isNextDisabled && styles.monthNavDisabled]}>
+            <Text style={[styles.monthNavArrow, isNextDisabled && styles.monthNavArrowDisabled]}>
+              ›
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Hero Performance Card */}
+      <View style={styles.card}>
+        <View style={styles.heroRow}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroLabel}>Calls Made</Text>
+            <Text style={styles.heroValue}>{activeMetrics.totalAttempts}</Text>
+          </View>
+          <View style={styles.heroDivider} />
+          <View style={styles.heroStat}>
+            <Text style={styles.heroLabel}>Connection Rate</Text>
+            <Text style={styles.heroValueAccent}>{activeMetrics.connectionRatePercent}%</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardDivider} />
+
         <View style={styles.statsGrid}>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Calls Made</Text>
-            <Text style={styles.statValue}>{monthMetrics.totalAttempts}</Text>
-          </View>
-          <View style={styles.statBox}>
             <Text style={styles.statLabel}>Connected</Text>
-            <Text style={styles.statValue}>{monthMetrics.totalConnected}</Text>
+            <Text style={styles.statNumber}>{activeMetrics.totalConnected}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Not Connected</Text>
-            <Text style={styles.statValueMuted}>{monthMetrics.totalUnconnected}</Text>
+            <Text style={styles.statLabel}>Unconnected</Text>
+            <Text style={styles.statNumberMuted}>{activeMetrics.totalUnconnected}</Text>
           </View>
           <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Connection Rate</Text>
-            <Text style={styles.statValueAccent}>{monthMetrics.connectionRatePercent}%</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.durationRow}>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Total Talk Time</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(monthMetrics.totalDurationSeconds)}
+            <Text style={styles.statLabel}>Total Talk Time</Text>
+            <Text style={styles.statNumber}>
+              {formatVerboseDuration(activeMetrics.totalDurationSeconds)}
             </Text>
           </View>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Average Duration</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(monthMetrics.averageDurationSeconds)}
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Avg Call</Text>
+            <Text style={styles.statNumber}>
+              {formatVerboseDuration(activeMetrics.averageDurationSeconds)}
             </Text>
           </View>
         </View>
+      </View>
 
-        {/* Month's Call Results Distribution */}
-        <Text style={styles.subSectionTitle}>MONTH'S CALL RESULTS</Text>
-        {DEFAULT_CALL_OUTCOMES.map(outcome => {
-          const count = monthMetrics.outcomeDistribution[outcome.id] || 0;
-          const pct = monthMetrics.totalAttempts > 0
-            ? Math.round((count / monthMetrics.totalAttempts) * 100)
-            : 0;
-          return (
-            <View key={outcome.id} style={styles.outcomeRow}>
-              <View style={styles.outcomeHeader}>
-                <View style={styles.outcomeNameRow}>
+      {/* Call Outcome Distribution */}
+      <View style={styles.card}>
+        <View style={styles.outcomeCardHeader}>
+          <Text style={styles.sectionHeaderTitle}>Call Outcomes</Text>
+          <Text style={styles.sectionHeaderMeta}>
+            {totalCallsCount} {totalCallsCount === 1 ? 'call' : 'calls'}
+          </Text>
+        </View>
+
+        {/* Proportional Stacked Ratio Bar */}
+        {totalCallsCount > 0 ? (
+          <View style={styles.stackedBar}>
+            {DEFAULT_CALL_OUTCOMES.map((outcome) => {
+              const count = activeMetrics.outcomeDistribution[outcome.id] || 0;
+              if (count === 0) return null;
+              const flexWeight = count / totalCallsCount;
+              return (
+                <View
+                  key={outcome.id}
+                  style={[
+                    styles.stackedSegment,
+                    { flex: flexWeight, backgroundColor: outcome.color },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyBar} />
+        )}
+
+        {/* Outcome Item Rows */}
+        <View style={styles.outcomeList}>
+          {DEFAULT_CALL_OUTCOMES.map((outcome) => {
+            const count = activeMetrics.outcomeDistribution[outcome.id] || 0;
+            const pct =
+              totalCallsCount > 0 ? Math.round((count / totalCallsCount) * 100) : 0;
+
+            return (
+              <View key={outcome.id} style={styles.outcomeRow}>
+                <View style={styles.outcomeLeft}>
                   <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
                   <Text style={styles.outcomeLabel}>{outcome.label}</Text>
                 </View>
-                <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
+                <View style={styles.outcomeRight}>
+                  <Text style={styles.outcomeCount}>{count}</Text>
+                  <Text style={styles.outcomePercent}>{pct}%</Text>
+                </View>
               </View>
-              <ProgressBar progress={pct} color={outcome.color} height={4} />
-            </View>
-          );
-        })}
+            );
+          })}
+        </View>
 
-        <View style={styles.divider} />
-
-        {/* Button to open dedicated Day-by-Day Performance page for this month */}
-        <TouchableOpacity
-          activeOpacity={0.75}
-          onPress={() => setShowDailyBreakdown(true)}
-          style={styles.viewBreakdownBanner}>
-          <View style={styles.viewBreakdownLeft}>
-            <View style={styles.calendarIconBox}>
-              <Text style={styles.calendarIconText}>📅</Text>
-            </View>
-            <View style={styles.viewBreakdownTextGroup}>
-              <Text style={styles.viewBreakdownTitle}>Day-by-Day Performance</Text>
-              <Text style={styles.viewBreakdownSubtitle}>
-                View detailed daily breakdown for {monthData.monthLabel}
+        {/* Day-by-Day Activity link inside month tab */}
+        {selectedTab === 'month' && (
+          <>
+            <View style={styles.cardDivider} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowDailyBreakdown(true)}
+              style={styles.dayBreakdownLink}>
+              <Text style={styles.dayBreakdownLinkText}>
+                View daily activity for {monthData.monthLabel} →
               </Text>
-            </View>
-          </View>
-          <View style={styles.viewBreakdownRight}>
-            <Text style={styles.viewBreakdownArrow}>→</Text>
-          </View>
-        </TouchableOpacity>
-      </Card>
-
-      {/* ========================================================================= */}
-      {/* SECTION 3: LIFETIME PERFORMANCE (HEEYAKU APP CALLS ONLY)                 */}
-      {/* ========================================================================= */}
-      <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>3. LIFETIME PERFORMANCE</Text>
-        <Badge label="App Calls Only" variant="outline" size="sm" />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
-
-      <Card variant="default" style={styles.card}>
-        <View style={styles.statsGrid}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Total Calls</Text>
-            <Text style={styles.statValue}>{lifetimeMetrics.totalAttempts}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Connected</Text>
-            <Text style={styles.statValue}>{lifetimeMetrics.totalConnected}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Not Connected</Text>
-            <Text style={styles.statValueMuted}>{lifetimeMetrics.totalUnconnected}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Overall Rate</Text>
-            <Text style={styles.statValueAccent}>{lifetimeMetrics.connectionRatePercent}%</Text>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.durationRow}>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Total Talk Time</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(lifetimeMetrics.totalDurationSeconds)}
-            </Text>
-          </View>
-          <View style={styles.durationBox}>
-            <Text style={styles.durationLabel}>Average Duration</Text>
-            <Text style={styles.durationValue}>
-              {formatVerboseDuration(lifetimeMetrics.averageDurationSeconds)}
-            </Text>
-          </View>
-        </View>
-
-        {/* Lifetime Results Distribution */}
-        <Text style={styles.subSectionTitle}>ALL-TIME CALL RESULTS</Text>
-        {DEFAULT_CALL_OUTCOMES.map(outcome => {
-          const count = lifetimeMetrics.outcomeDistribution[outcome.id] || 0;
-          const pct = lifetimeMetrics.totalAttempts > 0
-            ? Math.round((count / lifetimeMetrics.totalAttempts) * 100)
-            : 0;
-          return (
-            <View key={outcome.id} style={styles.outcomeRow}>
-              <View style={styles.outcomeHeader}>
-                <View style={styles.outcomeNameRow}>
-                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
-                  <Text style={styles.outcomeLabel}>{outcome.label}</Text>
-                </View>
-                <Text style={styles.outcomeCount}>{count} ({pct}%)</Text>
-              </View>
-              <ProgressBar progress={pct} color={outcome.color} height={4} />
-            </View>
-          );
-        })}
-      </Card>
     </ScrollView>
   );
 };
@@ -519,57 +404,139 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121316',
+    backgroundColor: '#111215',
   },
   content: {
-    padding: 16,
-    paddingBottom: 36,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 4,
+    marginBottom: 16,
   },
-  title: {
+  pageTitle: {
     fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#8D919C',
-    marginTop: 2,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#8D919C',
-    letterSpacing: 0.8,
-  },
-  subSectionTitle: {
-    fontSize: 11,
     fontWeight: '700',
-    color: '#8D919C',
-    letterSpacing: 0.8,
-    marginTop: 16,
-    marginBottom: 12,
+    color: '#EDEDED',
+    letterSpacing: -0.3,
   },
+  pageSubtitle: {
+    fontSize: 13,
+    color: '#8B8F9A',
+    marginTop: 3,
+  },
+
+  /* Segmented Period Tabs */
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#18191E',
+    borderRadius: 8,
+    padding: 3,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#24262E',
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  tabItemActive: {
+    backgroundColor: '#272A33',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B8F9A',
+  },
+  tabTextActive: {
+    color: '#EDEDED',
+    fontWeight: '600',
+  },
+
+  /* Month Selector */
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#18191E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#24262E',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 14,
+  },
+  monthNavButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  monthNavArrow: {
+    fontSize: 20,
+    color: '#EDEDED',
+    fontWeight: '600',
+  },
+  monthNavDisabled: {
+    opacity: 0.3,
+  },
+  monthNavArrowDisabled: {
+    color: '#555860',
+  },
+  monthNavLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EDEDED',
+  },
+
+  /* Cards */
   card: {
-    backgroundColor: '#1C1D22',
-    borderColor: '#272932',
-    borderRadius: 18,
+    backgroundColor: '#18191E',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#24262E',
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 14,
   },
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  heroStat: {
+    flex: 1,
+  },
+  heroDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#262830',
+    marginHorizontal: 16,
+  },
+  heroLabel: {
+    fontSize: 12,
+    color: '#8B8F9A',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  heroValue: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#EDEDED',
+  },
+  heroValueAccent: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#34D399',
+  },
+
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#24262E',
+    marginVertical: 14,
+  },
+
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -577,71 +544,68 @@ const styles = StyleSheet.create({
   },
   statBox: {
     width: '47%',
-    backgroundColor: '#20222A',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#2B2D38',
   },
   statLabel: {
     fontSize: 11,
-    color: '#8D919C',
+    color: '#8B8F9A',
+    marginBottom: 3,
+  },
+  statNumber: {
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    color: '#EDEDED',
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  statValueMuted: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  statValueAccent: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#262832',
-    marginVertical: 14,
-  },
-  durationRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  durationBox: {
-    flex: 1,
-    backgroundColor: '#20222A',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#2B2D38',
-  },
-  durationLabel: {
-    fontSize: 11,
-    color: '#8D919C',
+  statNumberMuted: {
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    color: '#717682',
   },
-  durationValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  outcomeRow: {
-    marginBottom: 12,
-  },
-  outcomeHeader: {
+
+  /* Outcome section */
+  outcomeCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  outcomeNameRow: {
+  sectionHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#EDEDED',
+  },
+  sectionHeaderMeta: {
+    fontSize: 12,
+    color: '#8B8F9A',
+  },
+
+  /* Stacked Ratio Bar */
+  stackedBar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#24262E',
+    flexDirection: 'row',
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  stackedSegment: {
+    height: '100%',
+  },
+  emptyBar: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#24262E',
+    marginBottom: 16,
+  },
+
+  outcomeList: {
+    gap: 10,
+  },
+  outcomeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  outcomeLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -649,68 +613,83 @@ const styles = StyleSheet.create({
   outcomeDot: {
     width: 7,
     height: 7,
-    borderRadius: 3.5,
+    borderRadius: 4,
   },
   outcomeLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#D4D6DC',
+  },
+  outcomeRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   outcomeCount: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#8D919C',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#EDEDED',
   },
-  monthSelectorRow: {
+  outcomePercent: {
+    fontSize: 12,
+    color: '#8B8F9A',
+    width: 32,
+    textAlign: 'right',
+  },
+
+  dayBreakdownLink: {
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  dayBreakdownLinkText: {
+    fontSize: 13,
+    color: '#38BDF8',
+    fontWeight: '500',
+  },
+
+  /* Subpage styling */
+  subpageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1C1D22',
-    borderRadius: 14,
+    marginBottom: 14,
+  },
+  backButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#18191E',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#272932',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
+    borderColor: '#24262E',
   },
-  monthArrowButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#262832',
-    alignItems: 'center',
-    justifyContent: 'center',
+  backButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#EDEDED',
   },
-  monthArrowDisabled: {
-    opacity: 0.3,
+  subpageMonthTag: {
+    fontSize: 12,
+    color: '#8B8F9A',
+    fontWeight: '500',
   },
-  monthArrowText: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    lineHeight: 24,
-  },
-  monthArrowTextDisabled: {
-    color: '#64748B',
-  },
-  monthSelectorLabel: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  daysList: {
+  breakdownList: {
+    marginTop: 14,
     gap: 8,
   },
   dayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#20222A',
-    borderRadius: 10,
+    backgroundColor: '#18191E',
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2A2C37',
+    borderColor: '#24262E',
+  },
+  dayRowToday: {
+    borderColor: '#38BDF8',
+  },
+  dayRowEmpty: {
+    opacity: 0.5,
   },
   dayDateCol: {
     flex: 1,
@@ -718,169 +697,43 @@ const styles = StyleSheet.create({
   dayDateText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#C2C5CE',
+    color: '#EDEDED',
   },
   dayDateToday: {
     color: '#38BDF8',
-    fontWeight: '800',
+  },
+  dayDateTextMuted: {
+    color: '#717682',
+    fontWeight: '400',
   },
   dayMetricsCol: {
     alignItems: 'flex-end',
   },
   dayCallsText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: '500',
+    color: '#D4D6DC',
+  },
+  dayCallsTextMuted: {
+    color: '#717682',
   },
   dayTalkTimeText: {
     fontSize: 11,
-    color: '#8D919C',
+    color: '#8B8F9A',
     marginTop: 2,
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 13,
-    textAlign: 'center',
+  returnButton: {
+    marginTop: 20,
     paddingVertical: 12,
-  },
-  subpageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    marginTop: 4,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#20222A',
-    borderRadius: 10,
+    backgroundColor: '#18191E',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2B2D38',
+    borderColor: '#24262E',
+    alignItems: 'center',
   },
-  backButtonArrow: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  backButtonText: {
+  returnButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  subpageTitleBlock: {
-    marginBottom: 16,
-  },
-  monthSummaryMiniCard: {
-    backgroundColor: '#1C1D22',
-    borderColor: '#272932',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 18,
-  },
-  monthSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  monthSummaryItem: {
-    alignItems: 'center',
-  },
-  monthSummaryLabel: {
-    fontSize: 10,
-    color: '#8D919C',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  monthSummaryValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  monthSummaryValueMuted: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  bottomReturnButton: {
-    marginTop: 24,
-    marginBottom: 16,
-    paddingVertical: 14,
-    backgroundColor: '#20222A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2B2D38',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomReturnButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  viewBreakdownBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#20222A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2B2D38',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 6,
-  },
-  viewBreakdownLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  calendarIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#262832',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calendarIconText: {
-    fontSize: 16,
-  },
-  viewBreakdownTextGroup: {
-    flex: 1,
-  },
-  viewBreakdownTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  viewBreakdownSubtitle: {
-    fontSize: 11,
-    color: '#8D919C',
-    marginTop: 2,
-  },
-  viewBreakdownRight: {
-    paddingLeft: 8,
-  },
-  viewBreakdownArrow: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#38BDF8',
-  },
-  dayRowToday: {
-    borderColor: '#38BDF8',
-  },
-  dayRowEmpty: {
-    opacity: 0.7,
-  },
-  dayDateTextMuted: {
-    color: '#64748B',
-  },
-  dayCallsTextMuted: {
-    color: '#64748B',
+    color: '#EDEDED',
   },
 });

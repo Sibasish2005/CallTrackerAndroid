@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -47,8 +48,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       });
 
       onLoginSuccess(res.employee);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Could not connect to HEEYAKU server.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not connect to HEEYAKU server.';
+      setErrorMessage(message);
     } finally {
       setLoading(false);
     }
@@ -58,7 +60,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
-      <View style={styles.card}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
         {/* Brand Header */}
         <View style={styles.brandHeader}>
           <HeeyakuLogo size={42} />
@@ -136,7 +142,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
             <Text style={styles.submitButtonText}>Sign In to Workspace</Text>
           )}
         </TouchableOpacity>
-      </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
@@ -145,8 +152,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xxl,
   },
   card: {
     backgroundColor: COLORS.surface,
