@@ -159,6 +159,13 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
 
     return (
       <Card variant="default" style={styles.leadCard}>
+        {/* Contacted Watermark Stamp */}
+        {!isNew && (
+          <View style={styles.contactedWatermark} pointerEvents="none">
+            <Text style={styles.contactedWatermarkText}>CONTACTED</Text>
+          </View>
+        )}
+
         {/* Top Meta Row */}
         <View style={styles.cardHeader}>
           <View style={styles.nameRow}>
@@ -407,6 +414,28 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  contactedWatermark: {
+    position: 'absolute',
+    right: 14,
+    top: 36,
+    transform: [{ rotate: '-12deg' }],
+    borderWidth: 1.5,
+    borderColor: 'rgba(52, 211, 153, 0.35)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(52, 211, 153, 0.08)',
+    zIndex: 1,
+  },
+  contactedWatermarkText: {
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2.2,
+    color: 'rgba(52, 211, 153, 0.55)',
+    textTransform: 'uppercase',
   },
   cardHeader: {
     flexDirection: 'row',

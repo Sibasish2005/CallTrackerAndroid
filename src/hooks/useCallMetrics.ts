@@ -15,12 +15,28 @@ export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
     };
   }
 
-  // Sort chronologically (oldest first) so only the first connected call for a lead counts
+  // Sort chronologically (oldest first)
   const sortedCalls = [...calls].sort((a, b) => {
     const timeA = Number(a.startedAt || a.date || 0);
     const timeB = Number(b.startedAt || b.date || 0);
     return timeA - timeB;
   });
+
+  // Group calls by lead
+  const callsByLead = new Map<string, CallRecord[]>();
+  for (const call of sortedCalls) {
+    const cleanPhone = (call.phoneNumber || call.number || '').replace(/[^0-9]/g, '').slice(-10);
+    const leadKey = call.leadId
+      ? `lead_${call.leadId}`
+      : cleanPhone
+      ? `phone_${cleanPhone}`
+      : `call_${call.id}`;
+
+    if (!callsByLead.has(leadKey)) {
+      callsByLead.set(leadKey, []);
+    }
+    callsByLead.get(leadKey)!.push(call);
+  }
 
   let attempts = 0;
   let connectedCount = 0;
@@ -28,37 +44,47 @@ export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
   let totalDuration = 0;
   let connectedDuration = 0;
   const outcomeCounts: Record<string, number> = {};
-  const seenConnectedLeads = new Set<string>();
 
-  for (const call of sortedCalls) {
-    const duration = call.durationSeconds ?? call.duration ?? 0;
-    attempts++;
-    totalDuration += duration;
-
-    const leadKey = call.leadId
-      ? `lead_${call.leadId}`
-      : `phone_${(call.phoneNumber || call.number || '').replace(/[^0-9]/g, '').slice(-10)}`;
-
-    // Authoritative connection check:
-    // If call.connected is explicitly provided, adhere to it (backend DB source of truth)
-    // Otherwise fallback to duration > 0 and non-missed/rejected
-    const isRawConnected =
-      call.connected !== undefined
+  for (const [, leadCalls] of callsByLead.entries()) {
+    // Check if ANY call to this lead was connected
+    const connectedCall = leadCalls.find((call) => {
+      const duration = call.durationSeconds ?? call.duration ?? 0;
+      return call.connected !== undefined
         ? Boolean(call.connected)
         : duration > 0 && call.type !== 3 && call.type !== 5;
+    });
 
-    // Enforce rule: only the first connected call for the same lead counts as connected
-    if (isRawConnected && !seenConnectedLeads.has(leadKey)) {
-      seenConnectedLeads.add(leadKey);
-      connectedCount++;
-      connectedDuration += duration;
+    if (connectedCall) {
+      // RULE: Once a lead is connected, more than one call will not be counted as more than one call on one lead.
+      // A connected lead counts as exactly 1 call (1 attempt, 1 connected).
+      attempts += 1;
+      connectedCount += 1;
+
+      for (const call of leadCalls) {
+        const duration = call.durationSeconds ?? call.duration ?? 0;
+        totalDuration += duration;
+      }
+      const connDur = connectedCall.durationSeconds ?? connectedCall.duration ?? 0;
+      connectedDuration += connDur > 0 ? connDur : (leadCalls[0].durationSeconds ?? leadCalls[0].duration ?? 0);
+
+      const outcome = connectedCall.outcomeId || leadCalls[leadCalls.length - 1].outcomeId;
+      if (outcome) {
+        const outcomeKey = outcome.toLowerCase();
+        outcomeCounts[outcomeKey] = (outcomeCounts[outcomeKey] || 0) + 1;
+      }
     } else {
-      unconnectedCount++;
-    }
+      // For leads that were NEVER connected, count each individual attempt
+      for (const call of leadCalls) {
+        attempts += 1;
+        unconnectedCount += 1;
+        const duration = call.durationSeconds ?? call.duration ?? 0;
+        totalDuration += duration;
 
-    if (call.outcomeId) {
-      const outcomeKey = call.outcomeId.toLowerCase();
-      outcomeCounts[outcomeKey] = (outcomeCounts[outcomeKey] || 0) + 1;
+        if (call.outcomeId) {
+          const outcomeKey = call.outcomeId.toLowerCase();
+          outcomeCounts[outcomeKey] = (outcomeCounts[outcomeKey] || 0) + 1;
+        }
+      }
     }
   }
 

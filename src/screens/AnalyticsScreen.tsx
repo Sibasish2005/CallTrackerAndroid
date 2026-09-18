@@ -196,7 +196,7 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
                       styles.dayCallsText,
                       !hasCalls && styles.dayCallsTextMuted,
                     ]}>
-                    {dayCalls.length} {dayCalls.length === 1 ? 'call' : 'calls'} ({dayMetrics.totalConnected} connected)
+                    {dayMetrics.totalAttempts} {dayMetrics.totalAttempts === 1 ? 'call' : 'calls'} ({dayMetrics.totalConnected} connected)
                   </Text>
                   <Text style={styles.dayTalkTimeText}>
                     {formatVerboseDuration(dayMetrics.totalDurationSeconds)}
