@@ -71,7 +71,7 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
       <CallOutcomeModal
         visible={Boolean(activeOutcomeCall)}
         call={activeOutcomeCall}
-        onSave={(callId, outcomeId, notes) => {
+        onSave={(callId: string, outcomeId: string, notes?: string) => {
           tracker.saveCallOutcome(callId, outcomeId, notes);
           setManualOutcomeCall(null);
         }}
