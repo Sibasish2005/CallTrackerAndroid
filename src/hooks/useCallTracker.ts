@@ -9,6 +9,7 @@ import {
   useTelephonyState,
 } from './tracker';
 import { apiClient } from '../services/apiClient';
+import { offlineQueue } from '../services/offlineQueue';
 
 export * from './tracker';
 
@@ -96,7 +97,16 @@ export function useCallTracker() {
         startedAt: completedRecord.startedAt || completedRecord.date,
         endedAt: completedRecord.endedAt,
       };
-      apiClient.syncCalls([syncPayload]).catch((e: unknown) => console.log('Immediate call sync err:', e));
+      apiClient.syncCalls([syncPayload])
+        .then(res => {
+          if (!res || !res.success) {
+            offlineQueue.enqueueCalls([syncPayload]).catch(() => {});
+          }
+        })
+        .catch((e: unknown) => {
+          console.log('Immediate call sync err, queued offline:', e);
+          offlineQueue.enqueueCalls([syncPayload]).catch(() => {});
+        });
 
       // 3. CRITICAL: Strictly and ONLY if it was initiated from the HEEYAKU app,
       // update appCalls and show the mandatory KPI outcome modal!
@@ -228,23 +238,28 @@ export function useCallTracker() {
 
       // 5. Backend Sync: Persist call & outcome to PostgreSQL database
       if (targetCall) {
+        const syncPayload = {
+          id: callId,
+          phoneNumber: targetCall.phoneNumber || targetCall.number,
+          contactName: targetCall.contactName || targetCall.name,
+          callType: targetCall.callType || 'OUTGOING',
+          durationSeconds: targetCall.durationSeconds ?? targetCall.duration ?? 0,
+          connected: targetCall.connected,
+          outcomeId,
+          notes: notes?.trim() || undefined,
+          startedAt: targetCall.startedAt || targetCall.date,
+          endedAt: targetCall.endedAt,
+        };
         try {
-          const syncPayload = {
-            id: callId,
-            phoneNumber: targetCall.phoneNumber || targetCall.number,
-            contactName: targetCall.contactName || targetCall.name,
-            callType: targetCall.callType || 'OUTGOING',
-            durationSeconds: targetCall.durationSeconds ?? targetCall.duration ?? 0,
-            connected: targetCall.connected,
-            outcomeId,
-            notes: notes?.trim() || undefined,
-            startedAt: targetCall.startedAt || targetCall.date,
-            endedAt: targetCall.endedAt,
-          };
           const res = await apiClient.syncCalls([syncPayload]);
-          console.log('Call & KPI successfully synced to backend:', res);
+          if (!res?.success) {
+            await offlineQueue.enqueueCalls([syncPayload]);
+          } else {
+            console.log('Call & KPI successfully synced to backend:', res);
+          }
         } catch (syncErr) {
-          console.warn('Failed to sync call to backend:', syncErr);
+          console.warn('Failed to sync call to backend, queued offline:', syncErr);
+          await offlineQueue.enqueueCalls([syncPayload]);
         }
       }
     },
@@ -275,6 +290,8 @@ export function useCallTracker() {
     };
 
     init();
+    // Flush any pending calls from previous offline sessions
+    offlineQueue.flush().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -286,6 +303,8 @@ export function useCallTracker() {
         if (nextState === 'active') {
           console.log('App resumed, syncing latest call history...');
           loadCallHistoryRef.current(false);
+          // Flush offline queue on resume
+          offlineQueue.flush().catch(() => {});
 
           // Only sync calls that have not been synced yet
           if (appCalls && appCalls.length > 0) {
@@ -304,7 +323,11 @@ export function useCallTracker() {
                 startedAt: c.startedAt || c.date,
                 endedAt: c.endedAt,
               }));
-              apiClient.syncCalls(payload).catch((e: unknown) => console.log('Sync err:', e));
+              apiClient.syncCalls(payload)
+                .then(res => {
+                  if (!res?.success) offlineQueue.enqueueCalls(payload);
+                })
+                .catch(() => offlineQueue.enqueueCalls(payload));
             }
           }
         }
@@ -324,6 +347,9 @@ export function useCallTracker() {
       isPeriodicSyncingRef.current = true;
       try {
         await loadCallHistoryRef.current(false);
+        await offlineQueue.flush();
+      } catch (err) {
+        // Silent catch for network jitter
       } finally {
         isPeriodicSyncingRef.current = false;
       }
