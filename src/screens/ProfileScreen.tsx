@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
+  Modal,
   NativeModules,
   RefreshControl,
   ScrollView,
@@ -42,6 +43,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isFetchingRef = useRef(false);
 
   // 1. Instant Cache Hydration on Mount
@@ -101,9 +103,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return () => clearInterval(interval);
   }, [loadBackendProfile]);
 
-  const handleLogout = async () => {
-    await authStorage.clearSession();
-    if (onLogout) onLogout();
+  const handleLogout = () => {
+    setShowLogoutModal(true);
   };
 
   return (
@@ -218,6 +219,49 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         style={styles.logoutButton}>
         <Text style={styles.logoutButtonText}>Sign Out of Workspace</Text>
       </TouchableOpacity>
+
+      {/* Fancy Theme-Matched Sign Out Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            {/* Soft Danger Icon Badge */}
+            <View style={styles.modalIconBox}>
+              <Text style={styles.modalIconText}>🚪</Text>
+            </View>
+
+            {/* Title & Description */}
+            <Text style={styles.modalTitle}>Sign Out</Text>
+            <Text style={styles.modalDescription}>
+              Are you sure you want to sign out of your workspace? You will need your credentials to log back in.
+            </Text>
+
+            {/* Action Buttons */}
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setShowLogoutModal(false)}
+                style={styles.modalCancelBtn}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={async () => {
+                  setShowLogoutModal(false);
+                  await authStorage.clearSession();
+                  if (onLogout) onLogout();
+                }}
+                style={styles.modalSignOutBtn}>
+                <Text style={styles.modalSignOutBtnText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Subtle Brand Footer */}
       <View style={styles.footerBranding}>
@@ -403,5 +447,90 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
     marginTop: 6,
+  },
+
+  /* Fancy Themed Sign Out Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#18191E',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#262932',
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#26191E',
+    borderWidth: 1,
+    borderColor: '#3F1F27',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalIconText: {
+    fontSize: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#EDEDED',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalDescription: {
+    fontSize: 13,
+    color: '#8B8F9A',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 22,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#22242B',
+    borderWidth: 1,
+    borderColor: '#2D3039',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#D4D6DC',
+  },
+  modalSignOutBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalSignOutBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
