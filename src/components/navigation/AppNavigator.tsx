@@ -126,6 +126,8 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             todayCalls={todayCalls}
             lifetimeMetrics={lifetimeMetrics}
             appCalls={appCalls}
+            onRefresh={onRefreshHistory}
+            refreshing={isLoadingHistory}
           />
         )}
 

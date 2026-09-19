@@ -13,11 +13,17 @@ function MainApp({ onLogout }: { onLogout: () => void }) {
   const statusBarHeight = StatusBar.currentHeight ?? 24;
   const tracker = useCallTracker();
 
-  // Authoritative metrics: strictly computed from HEEYAKU app-initiated calls
-  const { todayCalls, todayMetrics, lifetimeMetrics } = useCallMetrics(
-    tracker.appCalls,
-    tracker.appCalls
-  );
+  // Local optimistic metrics fallback for immediate in-flight responsiveness
+  const {
+    todayCalls: localTodayCalls,
+    todayMetrics: localTodayMetrics,
+    lifetimeMetrics: localLifetimeMetrics,
+  } = useCallMetrics(tracker.appCalls, tracker.appCalls);
+
+  // Authoritative backend data is the single source of truth across the entire mobile app
+  const todayMetrics = tracker.todayMetrics || localTodayMetrics;
+  const lifetimeMetrics = tracker.lifetimeMetrics || localLifetimeMetrics;
+  const todayCalls = tracker.todayCalls && tracker.todayCalls.length > 0 ? tracker.todayCalls : localTodayCalls;
 
   // Manual or automatic outcome disposition target
   const [manualOutcomeCall, setManualOutcomeCall] = useState<CallRecord | null>(null);

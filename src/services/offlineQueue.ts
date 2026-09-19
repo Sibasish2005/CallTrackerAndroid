@@ -1,11 +1,13 @@
 import { NativeModules } from 'react-native';
 import { apiClient } from './apiClient';
+import { assignedLeadsService } from './assignedLeadsService';
 
 const { CallTracker } = NativeModules;
 const QUEUE_STORAGE_KEY = 'heeyaku_offline_call_queue';
 
 export interface CallSyncPayload {
   id?: string;
+  leadId?: string;
   phoneNumber?: string;
   contactName?: string | null;
   callType?: string;
@@ -59,8 +61,14 @@ export const offlineQueue = {
     if (!calls || calls.length === 0) return;
     const currentQueue = await loadQueueFromStorage();
 
+    // STRICT: Only allow calls assigned to leads into the offline sync queue
+    const assignedOnly = calls.filter(c => {
+      return Boolean(c.leadId || assignedLeadsService.isAssignedLeadNumber(c.phoneNumber));
+    });
+    if (assignedOnly.length === 0) return;
+
     const updated = [...currentQueue];
-    for (const call of calls) {
+    for (const call of assignedOnly) {
       const callId = call.id;
       const callNum = call.phoneNumber;
       const existingIdx = updated.findIndex(item => {

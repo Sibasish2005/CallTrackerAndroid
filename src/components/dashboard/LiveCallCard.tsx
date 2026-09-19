@@ -21,12 +21,16 @@ export const LiveCallCard: React.FC<LiveCallCardProps> = ({
     <Card variant="default" style={styles.liveCallCard}>
       <View style={styles.liveCallHeader}>
         <View style={styles.liveStatusRow}>
-          <View style={styles.pulseDot} />
+          <View style={[styles.pulseDot, !isOffhook && styles.pulseDotConnecting]} />
           <Text style={styles.liveStatusText}>
-            {isOffhook ? 'LIVE CALL IN PROGRESS' : 'CONNECTING...'}
+            {isOffhook ? 'LIVE CALL CONNECTED' : 'DIALING / RINGING (CONNECTING)...'}
           </Text>
         </View>
-        <Badge label="Cellular" variant="outline" size="sm" />
+        <Badge
+          label={isOffhook ? 'Connected' : 'Ringing'}
+          variant={isOffhook ? 'glow' : 'outline'}
+          size="sm"
+        />
       </View>
 
       <Text style={styles.liveCallerName} numberOfLines={1}>
@@ -36,9 +40,11 @@ export const LiveCallCard: React.FC<LiveCallCardProps> = ({
         <Text style={styles.liveCallerNumber}>{activeNumber}</Text>
       ) : null}
 
-      <View style={styles.timerContainer}>
-        <Text style={styles.timerLabel}>CONNECTED DURATION</Text>
-        <Text style={styles.timerValue}>
+      <View style={[styles.timerContainer, isOffhook && styles.timerContainerActive]}>
+        <Text style={styles.timerLabel}>
+          {isOffhook ? 'REAL CONNECTED TALK TIME' : 'TALK TIMER PAUSED (AWAITING PICKUP)'}
+        </Text>
+        <Text style={[styles.timerValue, isOffhook && styles.timerValueActive]}>
           {formatDuration(currentDuration)}
         </Text>
       </View>
@@ -68,7 +74,10 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#22C55E',
+  },
+  pulseDotConnecting: {
+    backgroundColor: '#EAB308',
   },
   liveStatusText: {
     fontSize: 11,
@@ -96,10 +105,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2B2D38',
   },
+  timerContainerActive: {
+    borderColor: 'rgba(34, 197, 94, 0.4)',
+    backgroundColor: '#161E1A',
+  },
   timerLabel: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#8D919C',
     letterSpacing: 0.8,
   },
   timerValue: {
@@ -108,5 +121,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginTop: 2,
     fontVariant: ['tabular-nums'],
+  },
+  timerValueActive: {
+    color: '#22C55E',
   },
 });

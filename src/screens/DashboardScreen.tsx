@@ -110,8 +110,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       {/* WIDGET 1: Top Hero Schedule Card */}
       <TodayHeroCard metrics={metrics} />
 
-      {/* WIDGET 2 & 3: Middle Two-Column Bento Cards (Zero icons, pure highlighted text) */}
-      <BentoKpiRow metrics={metrics} />
+      {/* WIDGET 2 & 3: Middle Two-Column Bento Cards (Widget 3 is the Real Call Timer) */}
+      <BentoKpiRow
+        metrics={metrics}
+        isOffhook={isOffhook}
+        currentDuration={currentDuration}
+      />
 
       {/* WIDGET 4: Bottom Full-Width Card (segmented bar, legend, giant number & delta) */}
       <CallVolumeCard metrics={metrics} />

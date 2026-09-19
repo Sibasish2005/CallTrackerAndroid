@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NativeModules } from 'react-native';
-import { CallRecord } from '../../types';
+import { CallRecord, EmployeeMetrics } from '../../types';
 import { apiClient } from '../../services/apiClient';
+import { assignedLeadsService } from '../../services/assignedLeadsService';
 
 const { CallTracker } = NativeModules;
+const CACHED_METRICS_KEY = 'heeyaku_cached_analytics';
 
 interface RawCallData {
   id?: string | number;
@@ -31,9 +33,43 @@ export interface UseCallHistoryReturn {
   setCallHistory: React.Dispatch<React.SetStateAction<CallRecord[]>>;
   appCalls: CallRecord[];
   setAppCalls: React.Dispatch<React.SetStateAction<CallRecord[]>>;
+  todayCalls: CallRecord[];
+  todayMetrics: EmployeeMetrics | null;
+  lifetimeMetrics: EmployeeMetrics | null;
   isLoadingHistory: boolean;
   loadAppCalls: () => Promise<void>;
   loadCallHistory: (showIndicator?: boolean) => Promise<void>;
+}
+
+function mapRawCallData(item: RawCallData): CallRecord {
+  const duration = Number(item.durationSeconds ?? item.duration) || 0;
+  const startedAt = Number(item.startedAt || item.date) || Date.now();
+  const endedAt = Number(item.endedAt) || (startedAt + duration * 1000);
+  const phone = item.phoneNumber || item.number || 'Unknown';
+  const name = item.contactName || item.name || '';
+
+  return {
+    id: String(item.id),
+    employeeId: item.employeeId || 'EMP-1001',
+    phoneNumber: phone,
+    contactName: name,
+    callType: item.callType || 'OUTGOING',
+    startedAt,
+    endedAt,
+    durationSeconds: duration,
+    connected: Boolean(item.connected),
+    outcomeId: item.outcomeId,
+    outcomeLabel: item.outcomeLabel,
+    notes: item.notes,
+    createdAt: Number(item.createdAt || startedAt),
+    number: phone,
+    name,
+    duration,
+    date: startedAt,
+    type: 2,
+    isAppInitiated: true,
+    synced: true,
+  };
 }
 
 export function useCallHistory(
@@ -42,43 +78,66 @@ export function useCallHistory(
 ): UseCallHistoryReturn {
   const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
   const [appCalls, setAppCalls] = useState<CallRecord[]>([]);
+  const [todayCalls, setTodayCalls] = useState<CallRecord[]>([]);
+  const [todayMetrics, setTodayMetrics] = useState<EmployeeMetrics | null>(null);
+  const [lifetimeMetrics, setLifetimeMetrics] = useState<EmployeeMetrics | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
 
-  // Fetch HEEYAKU app-initiated call history: Backend DB is the PRIMARY source of truth
+  // Hydrate cached backend metrics on mount
+  useEffect(() => {
+    async function hydrateCache() {
+      try {
+        if (CallTracker?.getItem) {
+          const raw = await CallTracker.getItem(CACHED_METRICS_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed.todayMetrics) setTodayMetrics(parsed.todayMetrics);
+            if (parsed.lifetimeMetrics) setLifetimeMetrics(parsed.lifetimeMetrics);
+            if (Array.isArray(parsed.todayCalls)) setTodayCalls(parsed.todayCalls);
+          }
+        }
+      } catch (e) {
+        console.log('Error hydrating cached analytics:', e);
+      }
+    }
+    hydrateCache();
+  }, []);
+
+  // Fetch HEEYAKU app-initiated call history & authoritative metrics directly from backend PostgreSQL DB
   const loadAppCalls = useCallback(async () => {
     try {
+      // Sync assigned leads list alongside analytics
+      assignedLeadsService.refreshAssignedLeads().catch(() => {});
+
       const res = await apiClient.getAnalytics();
-      if (res.success && Array.isArray(res.allCalls)) {
-        const mapped: CallRecord[] = (res.allCalls as RawCallData[]).map((item) => ({
-          id: String(item.id),
-          employeeId: item.employeeId || 'EMP-1001',
-          phoneNumber: item.phoneNumber || item.number || 'Unknown',
-          contactName: item.contactName || item.name || '',
-          callType: item.callType || 'OUTGOING',
-          startedAt: Number(item.startedAt || item.date) || Date.now(),
-          endedAt: Number(item.endedAt) || (Number(item.startedAt || item.date) + (Number(item.durationSeconds || item.duration) || 0) * 1000),
-          durationSeconds: Number(item.durationSeconds ?? item.duration) || 0,
-          connected: Boolean(item.connected),
-          outcomeId: item.outcomeId,
-          outcomeLabel: item.outcomeLabel,
-          notes: item.notes,
-          createdAt: Number(item.createdAt || item.startedAt || Date.now()),
-          number: item.phoneNumber || item.number || 'Unknown',
-          name: item.contactName || item.name || '',
-          duration: Number(item.durationSeconds ?? item.duration) || 0,
-          date: Number(item.startedAt || item.date) || Date.now(),
-          type: 2,
-          isAppInitiated: true,
-          synced: true,
-        }));
+      if (res.success) {
+        if (res.todayMetrics) setTodayMetrics(res.todayMetrics);
+        if (res.lifetimeMetrics) setLifetimeMetrics(res.lifetimeMetrics);
 
-        setAppCalls(mapped);
-
-        // Keep local native storage in lockstep with the backend DB
-        if (CallTracker?.setItem) {
-          CallTracker.setItem('calls_list', JSON.stringify(mapped)).catch(() => {});
+        let mappedToday: CallRecord[] = [];
+        if (Array.isArray(res.todayCalls)) {
+          mappedToday = (res.todayCalls as RawCallData[]).map(mapRawCallData);
+          setTodayCalls(mappedToday);
         }
-        return;
+
+        if (Array.isArray(res.allCalls)) {
+          const mappedAll: CallRecord[] = (res.allCalls as RawCallData[]).map(mapRawCallData);
+          setAppCalls(mappedAll);
+
+          // Keep local native storage in lockstep with the backend DB
+          if (CallTracker?.setItem) {
+            CallTracker.setItem('calls_list', JSON.stringify(mappedAll)).catch(() => {});
+            CallTracker.setItem(
+              CACHED_METRICS_KEY,
+              JSON.stringify({
+                todayMetrics: res.todayMetrics,
+                lifetimeMetrics: res.lifetimeMetrics,
+                todayCalls: mappedToday,
+              })
+            ).catch(() => {});
+          }
+          return;
+        }
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -193,9 +252,15 @@ export function useCallHistory(
             };
           });
 
-          setCallHistory(mapped);
-          if (mapped.length > 0) {
-            onLatestCallFound?.(mapped[0]);
+          // Strictly filter device history to only show assigned lead calls
+          const assignedHistory = mapped.filter(item => {
+            const phone = item.phoneNumber || item.number || '';
+            return assignedLeadsService.isAssignedLeadNumber(phone);
+          });
+
+          setCallHistory(assignedHistory);
+          if (assignedHistory.length > 0) {
+            onLatestCallFound?.(assignedHistory[0]);
           }
         }
       } catch (error: unknown) {
@@ -213,6 +278,9 @@ export function useCallHistory(
     setCallHistory,
     appCalls,
     setAppCalls,
+    todayCalls,
+    todayMetrics,
+    lifetimeMetrics,
     isLoadingHistory,
     loadAppCalls,
     loadCallHistory,

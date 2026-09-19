@@ -2,6 +2,12 @@ import { CallOutcomeConfig } from '../types';
 
 export const DEFAULT_CALL_OUTCOMES: CallOutcomeConfig[] = [
   {
+    id: 'contacted',
+    label: 'Contacted',
+    category: 'POSITIVE',
+    color: '#0284C7',
+  },
+  {
     id: 'interested',
     label: 'Interested',
     category: 'POSITIVE',
@@ -18,6 +24,12 @@ export const DEFAULT_CALL_OUTCOMES: CallOutcomeConfig[] = [
     label: 'Call back later',
     category: 'NEUTRAL',
     color: '#06B6D4',
+  },
+  {
+    id: 'converted',
+    label: 'Converted',
+    category: 'POSITIVE',
+    color: '#059669',
   },
   {
     id: 'not_interested',
@@ -44,12 +56,6 @@ export const DEFAULT_CALL_OUTCOMES: CallOutcomeConfig[] = [
     color: '#64748B',
   },
   {
-    id: 'converted',
-    label: 'Converted',
-    category: 'POSITIVE',
-    color: '#059669',
-  },
-  {
     id: 'not_qualified',
     label: 'Not qualified',
     category: 'NEGATIVE',
@@ -65,7 +71,7 @@ export const DEFAULT_CALL_OUTCOMES: CallOutcomeConfig[] = [
 
 export function getOutcomesForCall(connected: boolean): CallOutcomeConfig[] {
   if (connected) {
-    return DEFAULT_CALL_OUTCOMES;
+    return DEFAULT_CALL_OUTCOMES.filter(o => o.category !== 'UNCONNECTED');
   }
   // For unconnected calls, prioritize unconnected outcomes at the top
   return [
@@ -76,5 +82,6 @@ export function getOutcomesForCall(connected: boolean): CallOutcomeConfig[] {
 
 export function getOutcomeById(id?: string): CallOutcomeConfig | undefined {
   if (!id) return undefined;
-  return DEFAULT_CALL_OUTCOMES.find(o => o.id === id);
+  const key = id.toLowerCase().replace(/-/g, '_');
+  return DEFAULT_CALL_OUTCOMES.find(o => o.id === key);
 }

@@ -10,6 +10,7 @@ import {
 } from './tracker';
 import { apiClient } from '../services/apiClient';
 import { offlineQueue } from '../services/offlineQueue';
+import { assignedLeadsService } from '../services/assignedLeadsService';
 
 export * from './tracker';
 
@@ -52,6 +53,9 @@ export function useCallTracker() {
     setCallHistory,
     appCalls,
     setAppCalls,
+    todayCalls,
+    todayMetrics,
+    lifetimeMetrics,
     isLoadingHistory,
     loadAppCalls,
     loadCallHistory,
@@ -72,31 +76,57 @@ export function useCallTracker() {
   } = useCallFilter(appCalls);
 
   // 5. Telephony state, dialing & events
-  // 5. Telephony state, dialing & events
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
   useEffect(() => {
     onCallEndedEventRef.current = (completedRecord: CallRecord) => {
-      // 1. Update local callHistory
+      const callPhone = completedRecord.phoneNumber || completedRecord.number || '';
+      const matchedLead = assignedLeadsService.findAssignedLead(callPhone);
+      const isAssigned = Boolean(
+        completedRecord.isAppInitiated ||
+        Boolean(matchedLead) ||
+        assignedLeadsService.isAssignedLeadNumber(callPhone)
+      );
+
+      // STRICT FILTER: Never log, store, or sync calls outside the app / unassigned leads
+      if (!isAssigned) {
+        console.log(`[CallTracker] Call to ${callPhone} is outside assigned leads. Ignoring (no log/sync).`);
+        return;
+      }
+
+      // Attach assigned lead metadata if available
+      const enrichedRecord: CallRecord = {
+        ...completedRecord,
+        leadId: completedRecord.leadId || matchedLead?.id,
+        contactName: completedRecord.contactName || matchedLead?.name || completedRecord.name,
+        name: completedRecord.name || matchedLead?.name || completedRecord.contactName,
+        isAppInitiated: true,
+      };
+
+      // 1. Update local callHistory with assigned lead call
       setCallHistory(prev => {
-        const filtered = prev.filter(c => c.id !== completedRecord.id);
-        return [completedRecord, ...filtered.slice(0, 199)];
+        const filtered = prev.filter(c => c.id !== enrichedRecord.id);
+        return [enrichedRecord, ...filtered.slice(0, 199)];
       });
 
       // 2. IMMEDIATE BACKEND PERSISTENCE:
-      // Every call (whether connected = true or false) immediately reaches the backend DB
+      // Strictly sync ONLY assigned lead calls with real connected duration
       const syncPayload = {
-        id: completedRecord.id,
-        phoneNumber: completedRecord.phoneNumber || completedRecord.number,
-        contactName: completedRecord.contactName || completedRecord.name,
-        callType: completedRecord.callType || 'OUTGOING',
-        durationSeconds: completedRecord.durationSeconds ?? completedRecord.duration ?? 0,
-        connected: completedRecord.connected,
-        outcomeId: completedRecord.outcomeId,
-        outcomeLabel: completedRecord.outcomeLabel,
-        notes: completedRecord.notes,
-        startedAt: completedRecord.startedAt || completedRecord.date,
-        endedAt: completedRecord.endedAt,
+        id: enrichedRecord.id,
+        leadId: enrichedRecord.leadId,
+        phoneNumber: enrichedRecord.phoneNumber || enrichedRecord.number,
+        contactName: enrichedRecord.contactName || enrichedRecord.name,
+        callType: enrichedRecord.callType || 'OUTGOING',
+        durationSeconds: enrichedRecord.connected
+          ? (enrichedRecord.durationSeconds ?? enrichedRecord.duration ?? 0)
+          : 0,
+        connected: enrichedRecord.connected,
+        outcomeId: enrichedRecord.outcomeId,
+        outcomeLabel: enrichedRecord.outcomeLabel,
+        notes: enrichedRecord.notes,
+        startedAt: enrichedRecord.startedAt || enrichedRecord.date,
+        endedAt: enrichedRecord.endedAt,
       };
+
       apiClient.syncCalls([syncPayload])
         .then(res => {
           if (!res || !res.success) {
@@ -108,17 +138,14 @@ export function useCallTracker() {
           offlineQueue.enqueueCalls([syncPayload]).catch(() => {});
         });
 
-      // 3. CRITICAL: Strictly and ONLY if it was initiated from the HEEYAKU app,
-      // update appCalls and show the mandatory KPI outcome modal!
-      if (completedRecord.isAppInitiated) {
-        setAppCalls(prev => {
-          const filtered = prev.filter(c => c.id !== completedRecord.id);
-          return [completedRecord, ...filtered];
-        });
+      // 3. Update appCalls and prompt mandatory KPI outcome modal
+      setAppCalls(prev => {
+        const filtered = prev.filter(c => c.id !== enrichedRecord.id);
+        return [enrichedRecord, ...filtered];
+      });
 
-        // Set the popup modal target (mandatory KPI)
-        setPendingOutcomeCall(completedRecord);
-      }
+      // Set the popup modal target (mandatory KPI)
+      setPendingOutcomeCall(enrichedRecord);
     };
   });
   const handleCallEndedEvent = useCallback((completedRecord: CallRecord) => {
@@ -230,22 +257,40 @@ export function useCallTracker() {
           prev ? { ...prev, outcomeId, outcomeLabel, notes: finalNotes } : null
         );
 
-        // 4. Resync app calls from native storage after short delay for persistence consistency
+        // 4. Update assigned lead in memory cache
+        const callNum = targetCall?.phoneNumber || targetCall?.number;
+        const matchedLead = assignedLeadsService.findAssignedLead(callNum);
+        if (matchedLead) {
+          matchedLead.status = outcomeId.toUpperCase();
+          if (finalNotes?.trim()) {
+            matchedLead.notes = matchedLead.notes
+              ? `${matchedLead.notes}\n${finalNotes.trim()}`
+              : finalNotes.trim();
+          }
+        }
+
+        // 5. Resync app calls from native storage after short delay for persistence consistency
         setTimeout(() => {
           loadAppCalls();
         }, 300);
       });
 
-      // 5. Backend Sync: Persist call & outcome to PostgreSQL database
+      // 6. Backend Sync: Persist call & outcome to PostgreSQL database
       if (targetCall) {
+        const callNum = targetCall.phoneNumber || targetCall.number;
+        const matchedLead = assignedLeadsService.findAssignedLead(callNum);
         const syncPayload = {
           id: callId,
-          phoneNumber: targetCall.phoneNumber || targetCall.number,
-          contactName: targetCall.contactName || targetCall.name,
+          leadId: targetCall.leadId || matchedLead?.id,
+          phoneNumber: callNum,
+          contactName: targetCall.contactName || targetCall.name || matchedLead?.name,
           callType: targetCall.callType || 'OUTGOING',
-          durationSeconds: targetCall.durationSeconds ?? targetCall.duration ?? 0,
+          durationSeconds: targetCall.connected
+            ? (targetCall.durationSeconds ?? targetCall.duration ?? 0)
+            : 0,
           connected: targetCall.connected,
           outcomeId,
+          outcomeLabel: outcomeId,
           notes: notes?.trim() || undefined,
           startedAt: targetCall.startedAt || targetCall.date,
           endedAt: targetCall.endedAt,
@@ -369,6 +414,9 @@ export function useCallTracker() {
     lastCall,
     callHistory,
     appCalls,
+    todayCalls,
+    todayMetrics,
+    lifetimeMetrics,
     isLoadingHistory,
     statusMessage,
     permissionGranted,

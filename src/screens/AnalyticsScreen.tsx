@@ -20,45 +20,32 @@ interface AnalyticsScreenProps {
   todayCalls: CallRecord[];
   lifetimeMetrics: EmployeeMetrics;
   appCalls?: CallRecord[];
+  onRefresh?: () => void | Promise<void>;
+  refreshing?: boolean;
 }
 
 type PeriodTab = 'today' | 'month' | 'lifetime';
 
 export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
-  todayMetrics: propTodayMetrics,
-  todayCalls: propTodayCalls,
-  lifetimeMetrics: propLifetimeMetrics,
-  appCalls: propAppCalls = [],
+  todayMetrics,
+  todayCalls,
+  lifetimeMetrics,
+  appCalls = [],
+  onRefresh,
+  refreshing = false,
 }) => {
   const [selectedTab, setSelectedTab] = useState<PeriodTab>('today');
-  const [backendTodayMetrics, setBackendTodayMetrics] = useState<EmployeeMetrics | null>(null);
-  const [backendLifetimeMetrics, setBackendLifetimeMetrics] = useState<EmployeeMetrics | null>(null);
-  const [backendTodayCalls, setBackendTodayCalls] = useState<CallRecord[] | null>(null);
-  const [backendAllCalls, setBackendAllCalls] = useState<CallRecord[] | null>(null);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [localRefreshing, setLocalRefreshing] = useState<boolean>(false);
 
-  // Manual pull-to-refresh (no aggressive 4s interval)
-  const fetchBackendAnalytics = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setLocalRefreshing(true);
     try {
-      const res = await apiClient.getAnalytics();
-      if (res.success) {
-        if (res.todayMetrics) setBackendTodayMetrics(res.todayMetrics);
-        if (res.lifetimeMetrics) setBackendLifetimeMetrics(res.lifetimeMetrics);
-        if (res.todayCalls) setBackendTodayCalls(res.todayCalls);
-        if (res.allCalls) setBackendAllCalls(res.allCalls);
-      }
-    } catch (e) {
-      console.warn('Backend analytics fetch error:', e);
+      await onRefresh();
     } finally {
-      if (isRefresh) setRefreshing(false);
+      setLocalRefreshing(false);
     }
-  }, []);
-
-  const todayMetrics = backendTodayMetrics !== null ? backendTodayMetrics : propTodayMetrics;
-  const lifetimeMetrics = backendLifetimeMetrics !== null ? backendLifetimeMetrics : propLifetimeMetrics;
-  const todayCalls = backendTodayCalls !== null ? backendTodayCalls : propTodayCalls;
-  const appCalls = backendAllCalls !== null ? backendAllCalls : propAppCalls;
+  }, [onRefresh]);
 
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
@@ -223,11 +210,15 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => fetchBackendAnalytics(true)}
-          tintColor="#38BDF8"
-        />
+        onRefresh ? (
+          <RefreshControl
+            refreshing={refreshing || localRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#38BDF8']}
+            progressBackgroundColor="#1E293B"
+            tintColor="#38BDF8"
+          />
+        ) : undefined
       }>
       {/* Header */}
       <View style={styles.header}>

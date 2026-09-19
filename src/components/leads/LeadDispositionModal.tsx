@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../../theme/colors';
 import { apiClient } from '../../services/apiClient';
+import { assignedLeadsService } from '../../services/assignedLeadsService';
 
 export interface LeadItem {
   id: string;
@@ -85,6 +86,16 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
         setSubmitting(false);
         return;
       }
+
+      // Update memory cache in assignedLeadsService so entire app has updated status immediately
+      const matched = assignedLeadsService.findAssignedLead(lead.phoneNumber);
+      if (matched) {
+        matched.status = selectedStatus;
+        if (notes.trim()) {
+          matched.notes = matched.notes ? `${matched.notes}\n${notes.trim()}` : notes.trim();
+        }
+      }
+      assignedLeadsService.refreshAssignedLeads().catch(() => {});
 
       onSuccess(res.lead);
       onClose();

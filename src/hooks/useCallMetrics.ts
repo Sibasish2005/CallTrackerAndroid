@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { CallRecord, EmployeeMetrics } from '../types';
 import { isTimestampToday } from '../utils/dateRange';
+import { assignedLeadsService } from '../services/assignedLeadsService';
 
 export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
   if (!calls || calls.length === 0) {
@@ -60,16 +61,21 @@ export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
       attempts += 1;
       connectedCount += 1;
 
-      for (const call of leadCalls) {
-        const duration = call.durationSeconds ?? call.duration ?? 0;
-        totalDuration += duration;
-      }
+      // Strictly count ONLY real connected talk time (duration when call was actually answered)
       const connDur = connectedCall.durationSeconds ?? connectedCall.duration ?? 0;
-      connectedDuration += connDur > 0 ? connDur : (leadCalls[0].durationSeconds ?? leadCalls[0].duration ?? 0);
+      connectedDuration += connDur;
+      totalDuration += connDur;
 
-      const outcome = connectedCall.outcomeId || leadCalls[leadCalls.length - 1].outcomeId;
-      if (outcome) {
-        const outcomeKey = outcome.toLowerCase();
+      const matchedLead =
+        assignedLeadsService.findAssignedLead(connectedCall.phoneNumber || connectedCall.number);
+
+      const rawOutcome =
+        connectedCall.outcomeId ||
+        leadCalls[leadCalls.length - 1].outcomeId ||
+        matchedLead?.status;
+
+      if (rawOutcome) {
+        const outcomeKey = rawOutcome.toLowerCase().replace(/-/g, '_');
         outcomeCounts[outcomeKey] = (outcomeCounts[outcomeKey] || 0) + 1;
       }
     } else {
@@ -77,11 +83,14 @@ export function calculateMetrics(calls: CallRecord[]): EmployeeMetrics {
       for (const call of leadCalls) {
         attempts += 1;
         unconnectedCount += 1;
-        const duration = call.durationSeconds ?? call.duration ?? 0;
-        totalDuration += duration;
+        // CRITICAL: Ringing/unconnected duration is NOT talk time. Never add to totalDuration.
 
-        if (call.outcomeId) {
-          const outcomeKey = call.outcomeId.toLowerCase();
+        const matchedLead =
+          assignedLeadsService.findAssignedLead(call.phoneNumber || call.number);
+
+        const rawOutcome = call.outcomeId || matchedLead?.status;
+        if (rawOutcome) {
+          const outcomeKey = rawOutcome.toLowerCase().replace(/-/g, '_');
           outcomeCounts[outcomeKey] = (outcomeCounts[outcomeKey] || 0) + 1;
         }
       }

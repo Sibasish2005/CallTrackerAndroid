@@ -17,9 +17,9 @@ import { Icon } from '../components/common/Icon';
 import { Card } from '../components/common/Card';
 import { apiClient } from '../services/apiClient';
 import { LeadDispositionModal, LeadItem } from '../components/leads/LeadDispositionModal';
+import { assignedLeadsService, CACHED_LEADS_KEY } from '../services/assignedLeadsService';
 
 const { CallTracker } = NativeModules;
-const CACHED_LEADS_KEY = 'heeyaku_cached_leads';
 
 interface LeadsScreenProps {
   onMakeCall: (phoneNumber: string, contactName?: string) => void;
@@ -48,6 +48,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
               setLeads(parsed);
+              assignedLeadsService.setMemoryLeads(parsed);
               setLoading(false);
             }
           }
@@ -70,6 +71,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
       const res = await apiClient.getAssignedLeads();
       if (res.success && Array.isArray(res.leads)) {
         setLeads(res.leads);
+        assignedLeadsService.setMemoryLeads(res.leads);
         if (CallTracker?.setItem) {
           CallTracker.setItem(CACHED_LEADS_KEY, JSON.stringify(res.leads)).catch(() => {});
         }

@@ -128,7 +128,17 @@ export function useTelephonyState({
         console.log('CallEnded event received:', data);
         const { duration = 0, number = '', name = '', date = Date.now(), id } = data;
         const callDuration = Number(duration) || 0;
-        const wasConnected = reachedOffhookRef.current || callDuration > 0;
+        
+        // Strict Real Call Duration: ONLY count seconds spent offhook (connected talk time)
+        const elapsedOffhook = offhookTimestampRef.current
+          ? Math.max(0, Math.floor((Date.now() - offhookTimestampRef.current) / 1000))
+          : 0;
+
+        // A call is ONLY connected if offhook was reached (party answered)
+        const wasConnected = Boolean(reachedOffhookRef.current);
+        const realCallDuration = wasConnected
+          ? Math.max(elapsedOffhook, callDuration > 0 ? callDuration : 0)
+          : 0;
 
         const recordId = id ? String(id) : `${date}_${Date.now()}`;
         const finalNumber = number || activeNumberRef.current || 'Outgoing Call';
@@ -143,13 +153,13 @@ export function useTelephonyState({
           contactName: name || activeContactName || '',
           callType: 'OUTGOING',
           startedAt: date,
-          endedAt: date + callDuration * 1000,
-          durationSeconds: callDuration,
+          endedAt: date + realCallDuration * 1000,
+          durationSeconds: realCallDuration,
           connected: wasConnected,
           createdAt: date,
           number: finalNumber,
           name: name || activeContactName || '',
-          duration: callDuration,
+          duration: realCallDuration,
           date,
           type: 2,
           isAppInitiated: wasAppInitiated,
