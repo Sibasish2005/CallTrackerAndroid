@@ -34,6 +34,7 @@ export interface UseCallHistoryReturn {
   appCalls: CallRecord[];
   setAppCalls: React.Dispatch<React.SetStateAction<CallRecord[]>>;
   todayCalls: CallRecord[];
+  setTodayCalls: React.Dispatch<React.SetStateAction<CallRecord[]>>;
   todayMetrics: EmployeeMetrics | null;
   lifetimeMetrics: EmployeeMetrics | null;
   isLoadingHistory: boolean;
@@ -216,17 +217,8 @@ export function useCallHistory(
         if (Array.isArray(rawHistory)) {
           const mapped: CallRecord[] = rawHistory.map((item, index) => {
             const rawType = Number(item.type) || 2;
-            const callType =
-              rawType === 1
-                ? 'INCOMING'
-                : rawType === 3
-                ? 'MISSED'
-                : rawType === 5
-                ? 'REJECTED'
-                : 'OUTGOING';
-
             const durationSecs = Number(item.duration) || 0;
-            const isConnected = durationSecs > 0 && rawType !== 3 && rawType !== 5;
+            const isConnected = item.connected === true || durationSecs > 0;
             const id = String(item.id || `${item.date || Date.now()}_${index}`);
             const savedOutcome = getOutcomeForCall?.(id);
 
@@ -235,32 +227,27 @@ export function useCallHistory(
               employeeId: 'EMP-1082',
               phoneNumber: item.number || 'Unknown',
               contactName: item.name || '',
-              callType,
+              callType: 'OUTGOING',
               startedAt: Number(item.date) || Date.now(),
               endedAt: Number(item.date) + durationSecs * 1000,
               durationSeconds: durationSecs,
               connected: isConnected,
-              outcomeId: savedOutcome?.outcomeId,
-              outcomeLabel: savedOutcome?.outcomeLabel,
-              notes: savedOutcome?.notes,
+              outcomeId: item.outcomeId || savedOutcome?.outcomeId,
+              outcomeLabel: item.outcomeLabel || savedOutcome?.outcomeLabel,
+              notes: item.notes || savedOutcome?.notes,
               createdAt: Number(item.date) || Date.now(),
               number: item.number || 'Unknown',
               name: item.name || '',
               duration: durationSecs,
               date: Number(item.date) || Date.now(),
               type: rawType,
+              isAppInitiated: true,
             };
           });
 
-          // Strictly filter device history to only show assigned lead calls
-          const assignedHistory = mapped.filter(item => {
-            const phone = item.phoneNumber || item.number || '';
-            return assignedLeadsService.isAssignedLeadNumber(phone);
-          });
-
-          setCallHistory(assignedHistory);
-          if (assignedHistory.length > 0) {
-            onLatestCallFound?.(assignedHistory[0]);
+          setCallHistory(mapped);
+          if (mapped.length > 0) {
+            onLatestCallFound?.(mapped[0]);
           }
         }
       } catch (error: unknown) {
@@ -279,6 +266,7 @@ export function useCallHistory(
     appCalls,
     setAppCalls,
     todayCalls,
+    setTodayCalls,
     todayMetrics,
     lifetimeMetrics,
     isLoadingHistory,

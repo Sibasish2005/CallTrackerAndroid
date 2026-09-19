@@ -54,6 +54,7 @@ export function useCallTracker() {
     appCalls,
     setAppCalls,
     todayCalls,
+    setTodayCalls,
     todayMetrics,
     lifetimeMetrics,
     isLoadingHistory,
@@ -79,19 +80,14 @@ export function useCallTracker() {
   const onCallEndedEventRef = useRef<(completedRecord: CallRecord) => void>(() => {});
   useEffect(() => {
     onCallEndedEventRef.current = (completedRecord: CallRecord) => {
-      const callPhone = completedRecord.phoneNumber || completedRecord.number || '';
-      const matchedLead = assignedLeadsService.findAssignedLead(callPhone);
-      const isAssigned = Boolean(
-        completedRecord.isAppInitiated ||
-        Boolean(matchedLead) ||
-        assignedLeadsService.isAssignedLeadNumber(callPhone)
-      );
-
-      // STRICT FILTER: Never log, store, or sync calls outside the app / unassigned leads
-      if (!isAssigned) {
-        console.log(`[CallTracker] Call to ${callPhone} is outside assigned leads. Ignoring (no log/sync).`);
+      // STRICT APP FILTER: Only process calls initiated within the HEEYAKU app
+      if (!completedRecord.isAppInitiated) {
+        console.log('[CallTracker] Non-app call received. Discarding.');
         return;
       }
+
+      const callPhone = completedRecord.phoneNumber || completedRecord.number || '';
+      const matchedLead = assignedLeadsService.findAssignedLead(callPhone);
 
       // Attach assigned lead metadata if available
       const enrichedRecord: CallRecord = {
@@ -138,8 +134,13 @@ export function useCallTracker() {
           offlineQueue.enqueueCalls([syncPayload]).catch(() => {});
         });
 
-      // 3. Update appCalls and prompt mandatory KPI outcome modal
+      // 3. Update appCalls and todayCalls immediately so Home screen reflects new call instantly
       setAppCalls(prev => {
+        const filtered = prev.filter(c => c.id !== enrichedRecord.id);
+        return [enrichedRecord, ...filtered];
+      });
+
+      setTodayCalls(prev => {
         const filtered = prev.filter(c => c.id !== enrichedRecord.id);
         return [enrichedRecord, ...filtered];
       });

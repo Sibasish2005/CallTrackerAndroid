@@ -11,6 +11,7 @@ import { CallRecord, CallState, EmployeeMetrics } from '../types';
 import { COLORS } from '../theme/colors';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
+import { Icon } from '../components/common/Icon';
 import { HeeyakuLogo } from '../components/common/HeeyakuLogo';
 import { CallHistoryItemRow } from '../components/common/CallHistoryItemRow';
 import { TodayHeroCard } from '../components/dashboard/TodayHeroCard';
@@ -80,7 +81,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           />
         ) : undefined
       }>
-      {/* Top Header - Kept EXACTLY as specified */}
+      {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.brandingRow}>
           <HeeyakuLogo size={42} />
@@ -90,11 +91,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
 
-        <Badge
-          label={isListening ? 'Tracking Active' : 'Standby'}
-          variant="outline"
-          size="sm"
-        />
+        <View style={styles.headerRight}>
+          <View style={[styles.statusBadge, isListening ? styles.statusBadgeActive : styles.statusBadgeIdle]}>
+            <View style={[styles.statusIndicatorDot, isListening ? styles.dotActive : styles.dotIdle]} />
+            <Text style={[styles.statusBadgeText, isListening ? styles.textActive : styles.textIdle]}>
+              {isListening ? 'Tracking Active' : 'Standby'}
+            </Text>
+          </View>
+        </View>
       </View>
 
       {/* Live Call Active Card */}
@@ -107,25 +111,31 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         />
       )}
 
-      {/* WIDGET 1: Top Hero Schedule Card */}
+      {/* WIDGET 1: Top Hero Performance Card */}
       <TodayHeroCard metrics={metrics} />
 
-      {/* WIDGET 2 & 3: Middle Two-Column Bento Cards (Widget 3 is the Real Call Timer) */}
+      {/* WIDGET 2 & 3: Middle Two-Column Bento Cards */}
       <BentoKpiRow
         metrics={metrics}
         isOffhook={isOffhook}
         currentDuration={currentDuration}
       />
 
-      {/* WIDGET 4: Bottom Full-Width Card (segmented bar, legend, giant number & delta) */}
+      {/* WIDGET 4: Bottom Full-Width Card (Call volume breakdown) */}
       <CallVolumeCard metrics={metrics} />
 
       {/* Recent Activity from Today */}
       <View style={styles.recentsHeaderRow}>
-        <Text style={styles.sectionHeader}>{"TODAY'S CALL ACTIVITY"}</Text>
-        <TouchableOpacity activeOpacity={0.7} onPress={onNavigateToCalls}>
+        <View style={styles.recentsTitleGroup}>
+          <Text style={styles.sectionHeader}>{"TODAY'S CALL ACTIVITY"}</Text>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{recentCalls.length}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity activeOpacity={0.7} onPress={onNavigateToCalls} style={styles.viewAllButton}>
           <Text style={styles.viewAllText}>
-            View All ({recentCalls.length}) →
+            Assigned Leads →
           </Text>
         </TouchableOpacity>
       </View>
@@ -133,10 +143,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       <Card variant="default" style={styles.recentsCard}>
         {recentCalls.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No calls recorded today yet</Text>
+            <View style={styles.emptyIconCircle}>
+              <Icon name="call" size={24} color="#38BDF8" />
+            </View>
+            <Text style={styles.emptyTitle}>No calls logged today yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Outgoing calls made to leads will be automatically recorded here with verified real talk time.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={onNavigateToCalls}
+              style={styles.emptyActionButton}>
+              <Text style={styles.emptyActionText}>Open Assigned Leads →</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          recentCalls.slice(0, 5).map(item => (
+          recentCalls.slice(0, 10).map(item => (
             <CallHistoryItemRow
               key={item.id}
               item={item}
@@ -153,18 +175,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121316',
+    backgroundColor: '#0B0D14',
   },
   content: {
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 18,
-    marginTop: 4,
+    marginBottom: 20,
+    marginTop: 6,
   },
   brandingRow: {
     flexDirection: 'row',
@@ -178,45 +200,149 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   brandSubtitle: {
-    fontSize: 13,
-    color: COLORS.brandCyan,
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#38BDF8',
+    fontWeight: '700',
     marginTop: 2,
+    letterSpacing: 0.3,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  statusBadgeActive: {
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+  },
+  statusBadgeIdle: {
+    backgroundColor: 'rgba(100, 116, 139, 0.12)',
+    borderColor: 'rgba(100, 116, 139, 0.25)',
+  },
+  statusIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotActive: {
+    backgroundColor: '#22C55E',
+  },
+  dotIdle: {
+    backgroundColor: '#94A3B8',
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  textActive: {
+    color: '#4ADE80',
+  },
+  textIdle: {
+    color: '#94A3B8',
   },
   recentsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 2,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  recentsTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sectionHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#8D919C',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8E9BB5',
     letterSpacing: 0.8,
+  },
+  countBadge: {
+    backgroundColor: '#1E2436',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#38BDF8',
+  },
+  viewAllButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
   },
   viewAllText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#C2C5CE',
+    fontWeight: '700',
+    color: '#38BDF8',
   },
   recentsCard: {
     padding: 0,
     overflow: 'hidden',
-    backgroundColor: '#1C1D22',
-    borderColor: '#272932',
-    borderRadius: 18,
+    backgroundColor: '#151824',
+    borderColor: '#242A3E',
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   emptyContainer: {
-    padding: 24,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
     alignItems: 'center',
   },
-  emptyText: {
-    color: '#64748B',
-    fontSize: 14,
+  emptyIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  emptySubtitle: {
+    color: '#7B87A2',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 18,
+    maxWidth: 260,
+  },
+  emptyActionButton: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  emptyActionText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

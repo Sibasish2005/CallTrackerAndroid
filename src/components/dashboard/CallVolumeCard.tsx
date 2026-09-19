@@ -11,31 +11,42 @@ export const CallVolumeCard: React.FC<CallVolumeCardProps> = ({ metrics }) => {
   const connected = metrics.totalConnected;
   const unconnected = metrics.totalUnconnected;
 
-  const connectedFlex = Math.max(1, connected);
-  const unconnectedFlex = Math.max(1, unconnected);
+  const connectedFlex = Math.max(0, connected);
+  const unconnectedFlex = Math.max(0, unconnected);
+  const hasCalls = attempts > 0;
 
   return (
     <View style={styles.bottomCard}>
       <View style={styles.bottomCardContentRow}>
         {/* Left Column: Title, Subtitle, Segmented Progress Bar & Legend */}
         <View style={styles.bottomLeftCol}>
-          <Text style={styles.cardHighlightedTitle}>Total Call Attempts</Text>
-          <Text style={styles.cardSubtitle}>Daily cellular activity</Text>
+          <Text style={styles.cardHighlightedTitle}>Call Volume Breakdown</Text>
+          <Text style={styles.cardSubtitle}>Connected vs Unanswered Outreach</Text>
 
           {/* Segmented Bar */}
           <View style={styles.segmentedTrack}>
-            <View
-              style={[
-                styles.segmentConnected,
-                { flex: connectedFlex },
-              ]}
-            />
-            <View
-              style={[
-                styles.segmentUnconnected,
-                { flex: unconnectedFlex },
-              ]}
-            />
+            {hasCalls ? (
+              <>
+                {connected > 0 && (
+                  <View
+                    style={[
+                      styles.segmentConnected,
+                      { flex: connectedFlex },
+                    ]}
+                  />
+                )}
+                {unconnected > 0 && (
+                  <View
+                    style={[
+                      styles.segmentUnconnected,
+                      { flex: unconnectedFlex },
+                    ]}
+                  />
+                )}
+              </>
+            ) : (
+              <View style={styles.segmentEmpty} />
+            )}
           </View>
 
           {/* Legend row */}
@@ -49,17 +60,16 @@ export const CallVolumeCard: React.FC<CallVolumeCardProps> = ({ metrics }) => {
             <View style={styles.legendItem}>
               <View style={styles.legendDotOther} />
               <Text style={styles.legendText}>
-                Not Connected ({unconnected})
+                Unanswered ({unconnected})
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Right Column: Giant Total Attempts Number with Delta Indicator */}
+        {/* Right Column: Giant Total Attempts Number */}
         <View style={styles.bottomRightCol}>
-          <View style={styles.deltaNumberRow}>
-            <Text style={styles.bottomGiantNumber}>{attempts}</Text>
-          </View>
+          <Text style={styles.bottomGiantNumber}>{attempts}</Text>
+          <Text style={styles.bottomGiantLabel}>Dials</Text>
         </View>
       </View>
     </View>
@@ -68,16 +78,21 @@ export const CallVolumeCard: React.FC<CallVolumeCardProps> = ({ metrics }) => {
 
 const styles = StyleSheet.create({
   bottomCard: {
-    backgroundColor: '#1C1D22',
-    borderRadius: 18,
+    backgroundColor: '#151824',
+    borderRadius: 20,
     padding: 18,
-    marginBottom: 22,
+    marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#272932',
+    borderColor: '#242A3E',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
   },
   bottomCardContentRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   bottomLeftCol: {
@@ -85,30 +100,34 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   cardHighlightedTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#E2E8F0',
     letterSpacing: 0.2,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: '#8D919C',
-    marginTop: 3,
-    marginBottom: 16,
+    fontSize: 11,
+    color: '#7B87A2',
+    marginTop: 2,
+    marginBottom: 14,
   },
   segmentedTrack: {
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#2D2F38',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1E2333',
     flexDirection: 'row',
     overflow: 'hidden',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   segmentConnected: {
-    backgroundColor: '#1D7BF6',
+    backgroundColor: '#38BDF8',
   },
   segmentUnconnected: {
-    backgroundColor: '#353844',
+    backgroundColor: '#334155',
+  },
+  segmentEmpty: {
+    flex: 1,
+    backgroundColor: '#1E2333',
   },
   legendRow: {
     flexDirection: 'row',
@@ -121,42 +140,40 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendDotConnected: {
-    width: 7,
-    height: 7,
-    borderRadius: 1,
-    backgroundColor: '#1D7BF6',
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#38BDF8',
   },
   legendDotOther: {
-    width: 7,
-    height: 7,
-    borderRadius: 1,
-    backgroundColor: '#353844',
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: '#334155',
   },
   legendText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#8D919C',
+    color: '#8E9BB5',
   },
   bottomRightCol: {
-    justifyContent: 'flex-end',
-    alignItems: 'flex-end',
-    paddingBottom: 2,
-  },
-  deltaNumberRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingLeft: 12,
+    borderLeftWidth: 1,
+    borderLeftColor: '#1E2436',
   },
   bottomGiantNumber: {
-    fontSize: 42,
-    fontWeight: '800',
+    fontSize: 34,
+    fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: -0.5,
+    fontVariant: ['tabular-nums'],
   },
-  deltaIndicator: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#22C55E',
-    marginLeft: 6,
-    marginBottom: 8,
+  bottomGiantLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7B87A2',
+    marginTop: 1,
   },
 });

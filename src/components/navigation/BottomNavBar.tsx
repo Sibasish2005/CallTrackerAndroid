@@ -109,9 +109,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
 const styles = StyleSheet.create({
   navWrapper: {
-    backgroundColor: '#121316',
+    backgroundColor: '#0B0D14',
     borderTopWidth: 1,
-    borderTopColor: '#23252E',
+    borderTopColor: '#1E2436',
   },
   navBar: {
     flexDirection: 'row',
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     height: 64,
     paddingHorizontal: 8,
     paddingBottom: 4,
-    backgroundColor: '#181920',
+    backgroundColor: '#121520',
   },
   tabItem: {
     flex: 1,
@@ -134,23 +134,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoInactive: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   tabLabel: {
     fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#6B7A99',
     marginTop: 4,
   },
   tabLabelActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   activePill: {
-    width: 14,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: '#FFFFFF',
+    width: 16,
+    height: 2.5,
+    borderRadius: 1.5,
+    backgroundColor: '#38BDF8',
     marginTop: 4,
   },
 });

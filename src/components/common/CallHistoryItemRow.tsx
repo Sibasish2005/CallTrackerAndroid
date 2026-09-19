@@ -54,13 +54,13 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
           <View style={styles.metaRow}>
             <Icon
               name={isIncoming ? 'arrow-incoming' : 'arrow-outgoing'}
-              size={12}
-              color={COLORS.textTertiary}
+              size={11}
+              color={isConnected ? '#34D399' : '#64748B'}
               style={styles.arrowIcon}
             />
 
-            <Text style={styles.metaText}>
-              {isConnected ? formatVerboseDuration(duration) : 'Not Connected'}
+            <Text style={[styles.metaText, isConnected ? styles.metaTextConnected : styles.metaTextUnanswered]}>
+              {isConnected ? `${formatVerboseDuration(duration)} talk time` : 'Unanswered (0s)'}
             </Text>
 
             {item.outcomeLabel ? (
@@ -78,14 +78,14 @@ const CallHistoryItemRowComponent: React.FC<CallHistoryItemRowProps> = ({
         <Text style={styles.dateText}>{date ? formatRelativeDate(date) : ''}</Text>
       </TouchableOpacity>
 
-      {/* Independent 1-Tap Quick Dial Button: Clean sibling without touch responder conflict */}
+      {/* Independent 1-Tap Quick Dial Button */}
       <TouchableOpacity
         activeOpacity={0.65}
         delayPressIn={0}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         onPress={() => onQuickCall(number, name)}
         style={styles.callButton}>
-        <Icon name="call" size={16} color={COLORS.monoWhite} />
+        <Icon name="call" size={15} color="#FFFFFF" />
       </TouchableOpacity>
     </View>
   );
@@ -95,11 +95,11 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#1C1D22',
+    backgroundColor: '#151824',
     borderBottomWidth: 1,
-    borderBottomColor: '#262832',
+    borderBottomColor: '#1E2436',
   },
   infoTouchable: {
     flex: 1,
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
   },
   avatar: {
     marginRight: 12,
-    backgroundColor: '#23252E',
-    borderColor: '#2E313D',
+    backgroundColor: '#1C2132',
+    borderColor: '#283048',
   },
   infoContainer: {
     flex: 1,
@@ -119,27 +119,36 @@ const styles = StyleSheet.create({
   },
   nameText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 2,
+    letterSpacing: -0.2,
   },
   subNumberText: {
     fontSize: 12,
-    color: '#8D919C',
-    marginBottom: 3,
+    color: '#7B87A2',
+    marginBottom: 4,
+    fontWeight: '500',
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    flexWrap: 'wrap',
+    gap: 4,
   },
   arrowIcon: {
-    marginRight: 5,
+    marginRight: 2,
   },
   metaText: {
-    fontSize: 12,
-    color: '#8D919C',
-    marginRight: 8,
+    fontSize: 11,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  metaTextConnected: {
+    color: '#34D399',
+  },
+  metaTextUnanswered: {
+    color: '#64748B',
   },
   outcomeBadge: {
     paddingHorizontal: 6,
@@ -147,17 +156,18 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 11,
-    color: '#8D919C',
+    color: '#7B87A2',
     alignSelf: 'center',
-    marginRight: 4,
+    marginRight: 6,
+    fontWeight: '500',
   },
   callButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#262832',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#343744',
+    borderColor: '#334155',
     alignItems: 'center',
     justifyContent: 'center',
   },

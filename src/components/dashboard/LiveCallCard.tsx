@@ -18,16 +18,16 @@ export const LiveCallCard: React.FC<LiveCallCardProps> = ({
   currentDuration,
 }) => {
   return (
-    <Card variant="default" style={styles.liveCallCard}>
+    <Card variant="default" style={[styles.liveCallCard, isOffhook && styles.liveCallCardConnected]}>
       <View style={styles.liveCallHeader}>
         <View style={styles.liveStatusRow}>
           <View style={[styles.pulseDot, !isOffhook && styles.pulseDotConnecting]} />
-          <Text style={styles.liveStatusText}>
-            {isOffhook ? 'LIVE CALL CONNECTED' : 'DIALING / RINGING (CONNECTING)...'}
+          <Text style={[styles.liveStatusText, isOffhook ? styles.textGreen : styles.textAmber]}>
+            {isOffhook ? 'LIVE CALL CONNECTED' : 'DIALING LEAD (RINGING)...'}
           </Text>
         </View>
         <Badge
-          label={isOffhook ? 'Connected' : 'Ringing'}
+          label={isOffhook ? 'Answered' : 'Connecting'}
           variant={isOffhook ? 'glow' : 'outline'}
           size="sm"
         />
@@ -41,7 +41,7 @@ export const LiveCallCard: React.FC<LiveCallCardProps> = ({
       ) : null}
 
       <View style={[styles.timerContainer, isOffhook && styles.timerContainerActive]}>
-        <Text style={styles.timerLabel}>
+        <Text style={[styles.timerLabel, isOffhook && styles.timerLabelActive]}>
           {isOffhook ? 'REAL CONNECTED TALK TIME' : 'TALK TIMER PAUSED (AWAITING PICKUP)'}
         </Text>
         <Text style={[styles.timerValue, isOffhook && styles.timerValueActive]}>
@@ -55,25 +55,38 @@ export const LiveCallCard: React.FC<LiveCallCardProps> = ({
 const styles = StyleSheet.create({
   liveCallCard: {
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#2D303C',
-    backgroundColor: '#181920',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(234, 179, 8, 0.4)',
+    backgroundColor: '#181A22',
+    padding: 18,
+    shadowColor: '#EAB308',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  liveCallCardConnected: {
+    borderColor: 'rgba(34, 197, 94, 0.5)',
+    backgroundColor: '#0F1E16',
+    shadowColor: '#22C55E',
+    shadowOpacity: 0.25,
   },
   liveCallHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   liveStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
   pulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#22C55E',
   },
   pulseDotConnecting: {
@@ -81,46 +94,58 @@ const styles = StyleSheet.create({
   },
   liveStatusText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  textGreen: {
+    color: '#4ADE80',
+  },
+  textAmber: {
+    color: '#FACC15',
   },
   liveCallerName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
     marginTop: 4,
   },
   liveCallerNumber: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#8E9BB5',
     marginTop: 2,
+    fontWeight: '500',
   },
   timerContainer: {
     marginTop: 14,
-    backgroundColor: '#20222B',
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#1C2030',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#2B2D38',
+    borderColor: '#262D42',
   },
   timerContainerActive: {
     borderColor: 'rgba(34, 197, 94, 0.4)',
-    backgroundColor: '#161E1A',
+    backgroundColor: '#12261C',
   },
   timerLabel: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#8D919C',
+    fontWeight: '800',
+    color: '#8E9BB5',
     letterSpacing: 0.8,
   },
+  timerLabelActive: {
+    color: '#86EFAC',
+  },
   timerValue: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginTop: 2,
+    fontSize: 34,
+    fontWeight: '900',
+    color: '#E2E8F0',
+    marginTop: 3,
     fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
   },
   timerValueActive: {
     color: '#22C55E',

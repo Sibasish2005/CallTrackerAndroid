@@ -155,7 +155,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121316',
+    backgroundColor: '#0B0D14',
   },
   screenContainer: {
     flex: 1,

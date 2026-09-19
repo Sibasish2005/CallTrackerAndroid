@@ -126,25 +126,22 @@ export function useTelephonyState({
       'CallEnded',
       data => {
         console.log('CallEnded event received:', data);
-        const { duration = 0, number = '', name = '', date = Date.now(), id } = data;
-        const callDuration = Number(duration) || 0;
-        
-        // Strict Real Call Duration: ONLY count seconds spent offhook (connected talk time)
-        const elapsedOffhook = offhookTimestampRef.current
-          ? Math.max(0, Math.floor((Date.now() - offhookTimestampRef.current) / 1000))
-          : 0;
+        // STRICT CHECK: Ignore any non-app call completely
+        if (!data?.isAppInitiated && !isAppDialingRef.current) {
+          console.log('[CallTracker] Non-app call ignored in telephony listener');
+          return;
+        }
 
-        // A call is ONLY connected if offhook was reached (party answered)
-        const wasConnected = Boolean(reachedOffhookRef.current);
-        const realCallDuration = wasConnected
-          ? Math.max(elapsedOffhook, callDuration > 0 ? callDuration : 0)
-          : 0;
+        const { duration = 0, number = '', name = '', date = Date.now(), id, connected = false } = data;
+        const callDuration = Number(duration) || 0;
+
+        // Strict Real Connected Duration: ONLY count seconds actually spoken (recorded by Android RIL)
+        // If the call was rejected, unanswered, or canceled while ringing, callDuration is strictly 0 and connected is false.
+        const isCallConnected = Boolean(connected && callDuration > 0);
+        const realCallDuration = isCallConnected ? callDuration : 0;
 
         const recordId = id ? String(id) : `${date}_${Date.now()}`;
         const finalNumber = number || activeNumberRef.current || 'Outgoing Call';
-
-        const wasAppInitiated = Boolean(isAppDialingRef.current || data?.isAppInitiated || activeNumberRef.current);
-        isAppDialingRef.current = false;
 
         const completedRecord: CallRecord = {
           id: recordId,
@@ -155,25 +152,25 @@ export function useTelephonyState({
           startedAt: date,
           endedAt: date + realCallDuration * 1000,
           durationSeconds: realCallDuration,
-          connected: wasConnected,
+          connected: isCallConnected,
           createdAt: date,
           number: finalNumber,
           name: name || activeContactName || '',
           duration: realCallDuration,
           date,
           type: 2,
-          isAppInitiated: wasAppInitiated,
+          isAppInitiated: true,
         };
 
-        setLastCall(completedRecord);
-        onCallEndedEvent(completedRecord);
-
-
-        // Reset active tracking state
+        // Reset active tracking state immediately
+        isAppDialingRef.current = false;
         reachedOffhookRef.current = false;
         activeNumberRef.current = '';
         setActiveNumber('');
         setActiveContactName('');
+
+        setLastCall(completedRecord);
+        onCallEndedEvent(completedRecord);
 
         // Single debounced reload with actual CallLog
         scheduleHistoryReload();

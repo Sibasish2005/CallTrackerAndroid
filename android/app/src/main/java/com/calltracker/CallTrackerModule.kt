@@ -40,6 +40,8 @@ class CallTrackerModule(
     private var isAppInitiatedCall: Boolean = false
     @Volatile
     private var appInitiatedNumber: String? = null
+    @Volatile
+    private var appCallDialedTime: Long = 0L
 
     // Dedicated single-thread executor to eliminate unpooled thread churn
     private val bgExecutor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -230,6 +232,7 @@ class CallTrackerModule(
             // Flag that this call was explicitly initiated from HEEYAKU app
             isAppInitiatedCall = true
             appInitiatedNumber = sanitized
+            appCallDialedTime = System.currentTimeMillis()
 
             val intent = Intent(
                 Intent.ACTION_CALL,
@@ -243,6 +246,7 @@ class CallTrackerModule(
         } catch (error: Exception) {
             isAppInitiatedCall = false
             appInitiatedNumber = null
+            appCallDialedTime = 0L
             promise.reject(
                 "CALL_FAILED",
                 error.message,
@@ -253,67 +257,66 @@ class CallTrackerModule(
 
     @ReactMethod
     fun getCallHistory(limit: Int, promise: Promise) {
-        if (
-            ContextCompat.checkSelfPermission(
-                reactApplicationContext,
-                Manifest.permission.READ_CALL_LOG
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            promise.reject(
-                "PERMISSION_DENIED",
-                "READ_CALL_LOG permission is required"
-            )
-            return
-        }
-
+        // STRICT PRIVACY & INTEGRITY: Never return personal device-wide call logs.
+        // Return only HEEYAKU app-initiated calls from local storage.
         bgExecutor.execute {
-            try {
-                val array = Arguments.createArray()
-                val projection = arrayOf(
-                    CallLog.Calls._ID,
-                    CallLog.Calls.NUMBER,
-                    CallLog.Calls.CACHED_NAME,
-                    CallLog.Calls.DATE,
-                    CallLog.Calls.DURATION,
-                    CallLog.Calls.TYPE
-                )
+            synchronized(storageLock) {
+                try {
+                    val jsonStr = prefs.getString("calls_list", "[]") ?: "[]"
+                    val jsonArray = JSONArray(jsonStr)
+                    val outcomeMapStr = prefs.getString("outcome_map", "{}") ?: "{}"
+                    val outcomeMap = JSONObject(outcomeMapStr)
+                    val array = Arguments.createArray()
+                    val safeLimit = if (limit > 0) Math.min(limit, jsonArray.length()) else jsonArray.length()
 
-                val cursor = reactApplicationContext.contentResolver.query(
-                    CallLog.Calls.CONTENT_URI,
-                    projection,
-                    null,
-                    null,
-                    "${CallLog.Calls.DATE} DESC"
-                )
+                    for (i in 0 until safeLimit) {
+                        val obj = jsonArray.getJSONObject(i)
+                        val id = obj.optString("id")
 
-                var count = 0
-                val safeLimit = if (limit > 0) limit else 50
+                        var outcomeId = if (obj.has("outcomeId")) obj.optString("outcomeId") else null
+                        var outcomeLabel = if (obj.has("outcomeLabel")) obj.optString("outcomeLabel") else null
+                        var notes = if (obj.has("notes")) obj.optString("notes") else null
 
-                cursor?.use {
-                    val idIdx = it.getColumnIndex(CallLog.Calls._ID)
-                    val numIdx = it.getColumnIndex(CallLog.Calls.NUMBER)
-                    val nameIdx = it.getColumnIndex(CallLog.Calls.CACHED_NAME)
-                    val dateIdx = it.getColumnIndex(CallLog.Calls.DATE)
-                    val durIdx = it.getColumnIndex(CallLog.Calls.DURATION)
-                    val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
+                        // If not on object, check outcome_map
+                        if (outcomeId.isNullOrBlank() && outcomeMap.has(id)) {
+                            val mapObj = outcomeMap.getJSONObject(id)
+                            outcomeId = mapObj.optString("outcomeId")
+                            outcomeLabel = mapObj.optString("outcomeLabel")
+                            if (mapObj.has("notes")) notes = mapObj.optString("notes")
+                        }
 
-                    while (it.moveToNext() && count < safeLimit) {
                         val map = Arguments.createMap().apply {
-                            putString("id", if (idIdx >= 0) it.getString(idIdx) else count.toString())
-                            putString("number", if (numIdx >= 0) it.getString(numIdx) ?: "Unknown" else "Unknown")
-                            putString("name", if (nameIdx >= 0) it.getString(nameIdx) ?: "" else "")
-                            putDouble("date", if (dateIdx >= 0) it.getLong(dateIdx).toDouble() else 0.0)
-                            putDouble("duration", if (durIdx >= 0) it.getLong(durIdx).toDouble() else 0.0)
-                            putInt("type", if (typeIdx >= 0) it.getInt(typeIdx) else 0)
+                            putString("id", id)
+                            putString("number", obj.optString("number"))
+                            putString("name", obj.optString("name"))
+                            putDouble("date", obj.optDouble("date", 0.0))
+                            putDouble("duration", obj.optDouble("duration", 0.0))
+                            putInt("type", obj.optInt("type", 2))
+                            putBoolean("connected", obj.optBoolean("connected", false))
+                            if (!outcomeId.isNullOrBlank()) putString("outcomeId", outcomeId)
+                            if (!outcomeLabel.isNullOrBlank()) putString("outcomeLabel", outcomeLabel)
+                            if (!notes.isNullOrBlank()) putString("notes", notes)
                         }
                         array.pushMap(map)
-                        count++
                     }
+                    promise.resolve(array)
+                } catch (e: Exception) {
+                    promise.reject("APP_CALLS_ERROR", e.message, e)
                 }
+            }
+        }
+    }
 
-                promise.resolve(array)
-            } catch (e: Exception) {
-                promise.reject("CALL_LOG_ERROR", e.message, e)
+    @ReactMethod
+    fun clearAppCalls(promise: Promise) {
+        bgExecutor.execute {
+            synchronized(storageLock) {
+                try {
+                    prefs.edit().remove("calls_list").remove("outcome_map").apply()
+                    promise.resolve(true)
+                } catch (e: Exception) {
+                    promise.reject("STORAGE_ERROR", e.message, e)
+                }
             }
         }
     }
@@ -522,90 +525,114 @@ class CallTrackerModule(
         }
     }
 
-    private fun fetchLatestCallLogAndEmit(fallbackDuration: Long) {
+    private fun fetchLatestCallLogAndEmit(targetNumber: String, dialedTime: Long) {
         bgExecutor.execute {
             try {
-                // Allow Android system time to commit the completed call to CallLog ContentProvider
-                Thread.sleep(700)
-
                 val hasCallLogPerm = ContextCompat.checkSelfPermission(
                     reactApplicationContext,
                     Manifest.permission.READ_CALL_LOG
                 ) == PackageManager.PERMISSION_GRANTED
 
-                var duration = fallbackDuration
-                var number = ""
-                var name = ""
-                var date = System.currentTimeMillis().toDouble()
+                var realDuration = 0L
+                var isConnected = false
+                var contactName = ""
+                var finalNumber = targetNumber
+                var callDate = if (dialedTime > 0) dialedTime.toDouble() else System.currentTimeMillis().toDouble()
+                var callFound = false
+                var attempts = 0
 
-                if (hasCallLogPerm) {
-                    val projection = arrayOf(
-                        CallLog.Calls._ID,
-                        CallLog.Calls.NUMBER,
-                        CallLog.Calls.CACHED_NAME,
-                        CallLog.Calls.DURATION,
-                        CallLog.Calls.DATE
-                    )
-                    val cursor = reactApplicationContext.contentResolver.query(
-                        CallLog.Calls.CONTENT_URI,
-                        projection,
-                        null,
-                        null,
-                        "${CallLog.Calls.DATE} DESC"
-                    )
+                val cleanTarget = targetNumber.replace(Regex("[^0-9]"), "")
+                val targetLast10 = if (cleanTarget.length >= 10) cleanTarget.takeLast(10) else cleanTarget
 
-                    cursor?.use {
-                        if (it.moveToNext()) {
+                val projection = arrayOf(
+                    CallLog.Calls._ID,
+                    CallLog.Calls.NUMBER,
+                    CallLog.Calls.CACHED_NAME,
+                    CallLog.Calls.DURATION,
+                    CallLog.Calls.DATE,
+                    CallLog.Calls.TYPE
+                )
+
+                // Poll CallLog with retries (Android OS takes 300ms - 1500ms to commit call duration after IDLE)
+                while (attempts < 4 && !callFound) {
+                    Thread.sleep(if (attempts == 0) 600 else 500)
+                    attempts++
+
+                    if (hasCallLogPerm) {
+                        val minDate = (if (dialedTime > 0) dialedTime - 10000 else System.currentTimeMillis() - 30000).toString()
+                        val cursor = reactApplicationContext.contentResolver.query(
+                            CallLog.Calls.CONTENT_URI,
+                            projection,
+                            "${CallLog.Calls.DATE} >= ?",
+                            arrayOf(minDate),
+                            "${CallLog.Calls.DATE} DESC"
+                        )
+
+                        cursor?.use {
                             val durIdx = it.getColumnIndex(CallLog.Calls.DURATION)
                             val numIdx = it.getColumnIndex(CallLog.Calls.NUMBER)
                             val nameIdx = it.getColumnIndex(CallLog.Calls.CACHED_NAME)
                             val dateIdx = it.getColumnIndex(CallLog.Calls.DATE)
+                            val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
 
-                            if (durIdx >= 0) duration = it.getLong(durIdx)
-                            if (numIdx >= 0) number = it.getString(numIdx) ?: ""
-                            if (nameIdx >= 0) name = it.getString(nameIdx) ?: ""
-                            if (dateIdx >= 0) date = it.getLong(dateIdx).toDouble()
+                            while (it.moveToNext()) {
+                                val rowNum = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
+                                val cleanRow = rowNum.replace(Regex("[^0-9]"), "")
+                                val rowLast10 = if (cleanRow.length >= 10) cleanRow.takeLast(10) else cleanRow
+
+                                if (targetLast10.isNotEmpty() && (rowLast10 == targetLast10 || cleanRow.contains(targetLast10))) {
+                                    callFound = true
+                                    val dur = if (durIdx >= 0) it.getLong(durIdx) else 0L
+                                    val callType = if (typeIdx >= 0) it.getInt(typeIdx) else CallLog.Calls.OUTGOING_TYPE
+
+                                    // Android CallLog.Calls.DURATION is strictly the connected talk time in seconds.
+                                    // 0 = unanswered / busy / rejected / ringing hangup.
+                                    // >0 = real connected talk time (seconds actually spoken).
+                                    if (dur > 0L && callType != CallLog.Calls.MISSED_TYPE && callType != CallLog.Calls.REJECTED_TYPE) {
+                                        realDuration = dur
+                                        isConnected = true
+                                    } else {
+                                        realDuration = 0L
+                                        isConnected = false
+                                    }
+
+                                    if (dateIdx >= 0) callDate = it.getLong(dateIdx).toDouble()
+                                    if (nameIdx >= 0) contactName = it.getString(nameIdx) ?: ""
+                                    if (rowNum.isNotBlank()) finalNumber = rowNum
+                                    break
+                                }
+                            }
                         }
                     }
                 }
 
-                val isAppCall = isAppInitiatedCall
-                val appNumber = appInitiatedNumber
-                // Reset flags for next call
+                // Reset app call flags now that call processing is done
                 isAppInitiatedCall = false
                 appInitiatedNumber = null
+                appCallDialedTime = 0L
 
-                val finalNumber = if (number.isNotBlank()) number else (appNumber ?: "Outgoing Call")
-                val isConnected = duration > 0
+                val generatedCallId = "${callDate.toLong()}_${System.currentTimeMillis()}"
 
-                val generatedCallId = "${date.toLong()}_${System.currentTimeMillis()}"
-
-                // If this call was initiated from HEEYAKU, save it permanently to lifetime app storage
-                if (isAppCall) {
-                    try {
-                        val recordObj = JSONObject().apply {
-                            put("id", generatedCallId)
-                            put("number", finalNumber)
-                            put("name", name)
-                            put("date", date)
-                            put("duration", duration.toDouble())
-                            put("type", 2)
-                            put("connected", isConnected)
-                        }
-                        persistAppCallRecord(recordObj)
-                    } catch (err: Exception) {
-                        android.util.Log.e("CallTracker", "Error auto-saving app call: ${err.message}")
-                    }
+                // Save app call permanently to lifetime storage
+                val recordObj = JSONObject().apply {
+                    put("id", generatedCallId)
+                    put("number", finalNumber)
+                    put("name", contactName)
+                    put("date", callDate)
+                    put("duration", realDuration.toDouble())
+                    put("type", 2)
+                    put("connected", isConnected)
                 }
+                persistAppCallRecord(recordObj)
 
                 if (reactApplicationContext.hasActiveReactInstance()) {
                     val params = Arguments.createMap().apply {
                         putString("id", generatedCallId)
-                        putDouble("duration", duration.toDouble())
+                        putDouble("duration", realDuration.toDouble())
                         putString("number", finalNumber)
-                        putString("name", name)
-                        putDouble("date", date)
-                        putBoolean("isAppInitiated", isAppCall)
+                        putString("name", contactName)
+                        putDouble("date", callDate)
+                        putBoolean("isAppInitiated", true)
                         putBoolean("connected", isConnected)
                     }
                     reactApplicationContext
@@ -613,26 +640,10 @@ class CallTrackerModule(
                         .emit("CallEnded", params)
                 }
             } catch (e: Exception) {
-                val isAppCall = isAppInitiatedCall
-                val appNumber = appInitiatedNumber
                 isAppInitiatedCall = false
                 appInitiatedNumber = null
-                val fallbackId = "${System.currentTimeMillis()}_fallback"
-
-                if (reactApplicationContext.hasActiveReactInstance()) {
-                    val params = Arguments.createMap().apply {
-                        putString("id", fallbackId)
-                        putDouble("duration", fallbackDuration.toDouble())
-                        putString("number", appNumber ?: "")
-                        putString("name", "")
-                        putDouble("date", System.currentTimeMillis().toDouble())
-                        putBoolean("isAppInitiated", isAppCall)
-                        putBoolean("connected", fallbackDuration > 0)
-                    }
-                    reactApplicationContext
-                        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-                        .emit("CallEnded", params)
-                }
+                appCallDialedTime = 0L
+                android.util.Log.e("CallTracker", "Error processing app call ended: ${e.message}")
             }
         }
     }
@@ -651,38 +662,33 @@ class CallTrackerModule(
 
             android.util.Log.d(
                 "CallTracker",
-                "CALL STATE: $stateName"
+                "CALL STATE: $stateName (isAppCall=$isAppInitiatedCall)"
             )
+
+            // STRICT FILTER: Personal calls (incoming, non-app outgoing) are completely ignored.
+            // Never alter app state, never track, never emit for calls outside HEEYAKU.
+            if (!isAppInitiatedCall) {
+                return
+            }
 
             when (state) {
                 TelephonyManager.CALL_STATE_OFFHOOK -> {
                     startedAt = System.currentTimeMillis()
-
-                    android.util.Log.d(
-                        "CallTracker",
-                        "CALL STARTED AT: $startedAt"
-                    )
+                    sendCallState(stateName)
                 }
 
                 TelephonyManager.CALL_STATE_IDLE -> {
-                    val start = startedAt
-                    val durationSeconds = if (start != null) {
-                        (System.currentTimeMillis() - start) / 1000
-                    } else {
-                        0L
-                    }
-
-                    android.util.Log.d(
-                        "CallTracker",
-                        "CALL ENDED. Measured duration: ${durationSeconds}s"
-                    )
-
                     startedAt = null
-                    fetchLatestCallLogAndEmit(durationSeconds)
+                    val targetNum = appInitiatedNumber ?: ""
+                    val dialedTime = appCallDialedTime
+                    sendCallState(stateName)
+                    fetchLatestCallLogAndEmit(targetNum, dialedTime)
+                }
+
+                else -> {
+                    sendCallState(stateName)
                 }
             }
-
-            sendCallState(stateName)
         }
     }
 
