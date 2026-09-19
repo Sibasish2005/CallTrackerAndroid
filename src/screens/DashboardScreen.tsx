@@ -15,8 +15,6 @@ import { Icon } from '../components/common/Icon';
 import { HeeyakuLogo } from '../components/common/HeeyakuLogo';
 import { CallHistoryItemRow } from '../components/common/CallHistoryItemRow';
 import { TodayHeroCard } from '../components/dashboard/TodayHeroCard';
-import { BentoKpiRow } from '../components/dashboard/BentoKpiRow';
-import { CallVolumeCard } from '../components/dashboard/CallVolumeCard';
 import { LiveCallCard } from '../components/dashboard/LiveCallCard';
 
 interface DashboardScreenProps {
@@ -111,18 +109,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         />
       )}
 
-      {/* WIDGET 1: Top Hero Performance Card */}
-      <TodayHeroCard metrics={metrics} />
-
-      {/* WIDGET 2 & 3: Middle Two-Column Bento Cards */}
-      <BentoKpiRow
+      {/* Unified Today Performance Card */}
+      <TodayHeroCard
         metrics={metrics}
-        isOffhook={isOffhook}
-        currentDuration={currentDuration}
+        onNavigateToCalls={onNavigateToCalls}
       />
-
-      {/* WIDGET 4: Bottom Full-Width Card (Call volume breakdown) */}
-      <CallVolumeCard metrics={metrics} />
 
       {/* Recent Activity from Today */}
       <View style={styles.recentsHeaderRow}>

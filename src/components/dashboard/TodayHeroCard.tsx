@@ -1,189 +1,271 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { EmployeeMetrics } from '../../types';
 import { formatVerboseDuration } from '../../utils/formatters';
+import { Icon } from '../common/Icon';
 
 interface TodayHeroCardProps {
   metrics: EmployeeMetrics;
+  onNavigateToCalls?: () => void;
 }
 
-export const TodayHeroCard: React.FC<TodayHeroCardProps> = ({ metrics }) => {
+export const TodayHeroCard: React.FC<TodayHeroCardProps> = ({
+  metrics,
+  onNavigateToCalls,
+}) => {
   const connectionRate = metrics.connectionRatePercent;
   const connectedCalls = metrics.totalConnected;
   const totalAttempts = metrics.totalAttempts;
   const talkTime = formatVerboseDuration(metrics.totalDurationSeconds);
+  const avgDuration = formatVerboseDuration(metrics.averageDurationSeconds);
+  const unansweredCalls = metrics.totalUnconnected;
+
+  // Format today's date cleanly (e.g. "Sat, 19 Sep")
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
 
   return (
-    <View style={styles.heroCard}>
-      {/* Top Header Row */}
-      <View style={styles.heroTopRow}>
-        <View style={styles.titleBadge}>
-          <View style={styles.statusPulse} />
-          <Text style={styles.heroPreTitle}>TODAY'S PERFORMANCE</Text>
+    <View style={styles.card}>
+      {/* Top Meta Bar */}
+      <View style={styles.topRow}>
+        <View style={styles.dateGroup}>
+          <Text style={styles.dateText}>{todayLabel.toUpperCase()}</Text>
+          <View style={styles.dotSeparator} />
+          <Text style={styles.shiftText}>Active Shift</Text>
         </View>
 
-        <View style={styles.ratePill}>
-          <Text style={styles.ratePillText}>{connectionRate}% Answered</Text>
+        <View style={styles.syncBadge}>
+          <View style={styles.pulseDot} />
+          <Text style={styles.syncBadgeText}>Live</Text>
         </View>
       </View>
 
-      {/* Main Focus: Real Connected Talk Time */}
-      <View style={styles.mainTalkTimeContainer}>
-        <Text style={styles.talkTimeLabel}>REAL CONNECTED TALK TIME</Text>
-        <Text style={styles.talkTimeValue}>{talkTime}</Text>
-        <Text style={styles.talkTimeSubtext}>
-          Active conversational time across all leads today
-        </Text>
+      {/* Main Focus: Connected Talk Time */}
+      <View style={styles.heroSection}>
+        <Text style={styles.heroLabel}>Total Talk Time</Text>
+        <Text style={styles.heroValue}>{talkTime}</Text>
       </View>
 
-      {/* Progress Track */}
-      <View style={styles.progressBarTrack}>
-        <View
-          style={[
-            styles.progressBarFill,
-            { width: `${Math.min(100, Math.max(totalAttempts > 0 ? 4 : 0, connectionRate))}%` },
-          ]}
-        />
-      </View>
-
-      {/* Bottom 3-Column Micro KPIs */}
-      <View style={styles.metricsRow}>
-        <View style={styles.metricCol}>
-          <Text style={styles.metricNumber}>{connectedCalls}</Text>
-          <Text style={styles.metricLabel}>Connected</Text>
+      {/* Clean 3-Column Metrics Grid */}
+      <View style={styles.statsGrid}>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{totalAttempts}</Text>
+          <Text style={styles.statLabel}>Dials</Text>
         </View>
 
-        <View style={styles.colDivider} />
+        <View style={styles.statDivider} />
 
-        <View style={styles.metricCol}>
-          <Text style={styles.metricNumber}>{totalAttempts}</Text>
-          <Text style={styles.metricLabel}>Total Attempts</Text>
+        <View style={styles.statBox}>
+          <Text style={[styles.statValue, connectedCalls > 0 && styles.statValueSuccess]}>
+            {connectedCalls}
+          </Text>
+          <Text style={styles.statLabel}>Connected</Text>
         </View>
 
-        <View style={styles.colDivider} />
+        <View style={styles.statDivider} />
 
-        <View style={styles.metricCol}>
-          <Text style={[styles.metricNumber, { color: '#38BDF8' }]}>
+        <View style={styles.statBox}>
+          <Text style={[styles.statValue, connectionRate > 0 && styles.statValueAccent]}>
             {connectionRate}%
           </Text>
-          <Text style={styles.metricLabel}>Connection Rate</Text>
+          <Text style={styles.statLabel}>Answer Rate</Text>
         </View>
       </View>
+
+      {/* Secondary Context Row: Only when there are calls */}
+      {totalAttempts > 0 && (
+        <View style={styles.secondaryRow}>
+          <Text style={styles.secondaryText}>
+            Avg call duration <Text style={styles.secondaryHighlight}>{avgDuration}</Text>
+          </Text>
+          <View style={styles.dotSeparator} />
+          <Text style={styles.secondaryText}>
+            Unanswered <Text style={styles.secondaryHighlight}>{unansweredCalls}</Text>
+          </Text>
+        </View>
+      )}
+
+      {/* Primary Action Button */}
+      {onNavigateToCalls && (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={onNavigateToCalls}
+          style={styles.actionButton}>
+          <View style={styles.actionIconContainer}>
+            <Icon name="call" size={14} color="#FFFFFF" />
+          </View>
+          <Text style={styles.actionButtonText}>Open Leads to Call</Text>
+          <Icon name="arrow-outgoing" size={12} color="#94A3B8" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  heroCard: {
-    backgroundColor: '#151824',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+  card: {
+    backgroundColor: '#121520',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#242A3E',
+    borderColor: '#1E2436',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  heroTopRow: {
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  titleBadge: {
+  dateGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  statusPulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#38BDF8',
-  },
-  heroPreTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#8E9BB5',
-    letterSpacing: 1,
-  },
-  ratePill: {
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
-  },
-  ratePillText: {
-    color: '#38BDF8',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  mainTalkTimeContainer: {
-    marginBottom: 16,
-  },
-  talkTimeLabel: {
+  dateText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#8E9BB5',
+    color: '#64748B',
     letterSpacing: 0.8,
-    marginBottom: 4,
   },
-  talkTimeValue: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-    fontVariant: ['tabular-nums'],
+  dotSeparator: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#334155',
   },
-  talkTimeSubtext: {
-    fontSize: 12,
-    color: '#6F7B95',
-    marginTop: 4,
+  shiftText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94A3B8',
   },
-  progressBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#1E2333',
-    overflow: 'hidden',
-    marginBottom: 18,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: '#38BDF8',
-  },
-  metricsRow: {
+  syncBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#1E2436',
+    gap: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.25)',
   },
-  metricCol: {
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22C55E',
+  },
+  syncBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4ADE80',
+    letterSpacing: 0.4,
+  },
+  heroSection: {
+    marginBottom: 16,
+  },
+  heroLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  heroValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.5,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#181C2A',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#242B42',
+  },
+  statBox: {
     flex: 1,
     alignItems: 'center',
   },
-  metricNumber: {
-    fontSize: 20,
+  statValue: {
+    fontSize: 18,
     fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.2,
+    color: '#F1F5F9',
+    marginBottom: 2,
   },
-  metricLabel: {
+  statValueSuccess: {
+    color: '#34D399',
+  },
+  statValueAccent: {
+    color: '#38BDF8',
+  },
+  statLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#7B87A2',
-    marginTop: 2,
+    color: '#64748B',
   },
-  colDivider: {
+  statDivider: {
     width: 1,
-    height: 26,
+    height: 24,
+    backgroundColor: '#242B42',
+  },
+  secondaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#1A2030',
+  },
+  secondaryText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  secondaryHighlight: {
+    color: '#CBD5E1',
+    fontWeight: '700',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
     backgroundColor: '#1E2436',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#2C354E',
+  },
+  actionIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F8FAFC',
+    letterSpacing: 0.2,
   },
 });
