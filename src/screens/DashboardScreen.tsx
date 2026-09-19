@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -62,6 +62,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setLocalRefreshing(false);
     }
   }, [onRefresh]);
+
+  // Synchronize with server immediately upon landing on dashboard
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   return (
     <ScrollView

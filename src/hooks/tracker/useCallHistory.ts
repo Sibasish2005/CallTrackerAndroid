@@ -124,6 +124,11 @@ export function useCallHistory(
         if (Array.isArray(res.allCalls)) {
           const mappedAll: CallRecord[] = (res.allCalls as RawCallData[]).map(mapRawCallData);
           setAppCalls(mappedAll);
+          setCallHistory(mappedAll);
+
+          if (mappedAll.length > 0) {
+            onLatestCallFound?.(mappedAll[0]);
+          }
 
           // Keep local native storage in lockstep with the backend DB
           if (CallTracker?.setItem) {
@@ -181,15 +186,25 @@ export function useCallHistory(
             };
           });
           setAppCalls(mapped);
+          setCallHistory(mapped);
         }
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.log('Error loading app calls fallback:', message);
     }
-  }, [getOutcomeForCall]);
+  }, [getOutcomeForCall, onLatestCallFound]);
 
-  // Fetch call history from native CallLog (up to 200 records)
+  // Continuously maintain authoritative synchronization with backend DB
+  useEffect(() => {
+    loadAppCalls();
+    const interval = setInterval(() => {
+      loadAppCalls();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loadAppCalls]);
+
+  // Pull-to-refresh handler that forces immediate backend query
   const loadCallHistory = useCallback(
     async (showIndicator = false) => {
       try {
@@ -197,59 +212,11 @@ export function useCallHistory(
           setIsLoadingHistory(true);
         }
 
-        // When showing indicator (e.g. refresh), enforce a smooth minimum delay
-        // to prevent instant flickering and accommodate future server latency
         const minDelay = showIndicator
-          ? new Promise<void>(resolve => setTimeout(() => resolve(), 500))
+          ? new Promise<void>(resolve => setTimeout(() => resolve(), 300))
           : Promise.resolve();
 
-        let rawHistoryPromise: Promise<RawCallData[]> = Promise.resolve([]);
-        if (CallTracker?.getCallHistory) {
-          rawHistoryPromise = CallTracker.getCallHistory(200);
-        }
-
-        // Authoritative sync: Await both backend DB calls (appCalls) and native device history
-        const [, rawHistory] = await Promise.all([
-          loadAppCalls(),
-          rawHistoryPromise,
-          minDelay,
-        ]);
-        if (Array.isArray(rawHistory)) {
-          const mapped: CallRecord[] = rawHistory.map((item, index) => {
-            const rawType = Number(item.type) || 2;
-            const durationSecs = Number(item.duration) || 0;
-            const isConnected = item.connected === true || durationSecs > 0;
-            const id = String(item.id || `${item.date || Date.now()}_${index}`);
-            const savedOutcome = getOutcomeForCall?.(id);
-
-            return {
-              id,
-              employeeId: 'EMP-1082',
-              phoneNumber: item.number || 'Unknown',
-              contactName: item.name || '',
-              callType: 'OUTGOING',
-              startedAt: Number(item.date) || Date.now(),
-              endedAt: Number(item.date) + durationSecs * 1000,
-              durationSeconds: durationSecs,
-              connected: isConnected,
-              outcomeId: item.outcomeId || savedOutcome?.outcomeId,
-              outcomeLabel: item.outcomeLabel || savedOutcome?.outcomeLabel,
-              notes: item.notes || savedOutcome?.notes,
-              createdAt: Number(item.date) || Date.now(),
-              number: item.number || 'Unknown',
-              name: item.name || '',
-              duration: durationSecs,
-              date: Number(item.date) || Date.now(),
-              type: rawType,
-              isAppInitiated: true,
-            };
-          });
-
-          setCallHistory(mapped);
-          if (mapped.length > 0) {
-            onLatestCallFound?.(mapped[0]);
-          }
-        }
+        await Promise.all([loadAppCalls(), minDelay]);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         console.log('Error fetching call history:', message);
@@ -257,7 +224,7 @@ export function useCallHistory(
         setIsLoadingHistory(false);
       }
     },
-    [getOutcomeForCall, loadAppCalls, onLatestCallFound]
+    [loadAppCalls]
   );
 
   return {

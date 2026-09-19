@@ -64,7 +64,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
   onSelectCall,
   onLogout,
 }) => {
-  const [currentTab, setCurrentTab] = useState<TabRoute>('leads');
+  const [currentTab, setCurrentTab] = useState<TabRoute>('dashboard');
   const onRefreshHistoryRef = useRef(onRefreshHistory);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.screenContainer}>
-        {/* Tab 1: Assigned Leads CRM (Replaces legacy calls tab) */}
+        {/* Tab 1: Assigned Leads CRM */}
         {currentTab === 'leads' && (
           <LeadsScreen onMakeCall={onMakeCall} />
         )}
@@ -91,7 +91,7 @@ export const AppNavigator: React.FC<AppNavigatorProps> = ({
             activeContactName={activeContactName}
             currentDuration={currentDuration}
             metrics={todayMetrics}
-            recentCalls={todayCalls}
+            recentCalls={todayCalls && todayCalls.length > 0 ? todayCalls : appCalls}
             isListening={isListening}
             onNavigateToCalls={() => setCurrentTab('leads')}
             onQuickCall={onMakeCall}

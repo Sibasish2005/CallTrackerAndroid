@@ -37,6 +37,8 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
   // Modal State for KPI
   const [activeDispositionLead, setActiveDispositionLead] = useState<LeadItem | null>(null);
   const isFetchingRef = useRef(false);
+  const leadsCountRef = useRef(0);
+  leadsCountRef.current = leads.length;
 
   // 1. Instant Cache Hydration on Mount
   useEffect(() => {
@@ -65,7 +67,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
     isFetchingRef.current = true;
 
     if (isRefresh) setRefreshing(true);
-    else if (isInitial && leads.length === 0) setLoading(true);
+    else if (isInitial && leadsCountRef.current === 0) setLoading(true);
 
     try {
       const res = await apiClient.getAssignedLeads();
@@ -83,7 +85,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
       if (isRefresh) setRefreshing(false);
       isFetchingRef.current = false;
     }
-  }, [leads.length]);
+  }, []);
 
   useEffect(() => {
     fetchLeads(false, true);
