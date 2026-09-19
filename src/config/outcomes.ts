@@ -73,11 +73,8 @@ export function getOutcomesForCall(connected: boolean): CallOutcomeConfig[] {
   if (connected) {
     return DEFAULT_CALL_OUTCOMES.filter(o => o.category !== 'UNCONNECTED');
   }
-  // For unconnected calls, prioritize unconnected outcomes at the top
-  return [
-    ...DEFAULT_CALL_OUTCOMES.filter(o => o.category === 'UNCONNECTED'),
-    ...DEFAULT_CALL_OUTCOMES.filter(o => o.category !== 'UNCONNECTED'),
-  ];
+  // For unconnected calls, strictly allow only unconnected outcomes (no answer, busy, wrong number)
+  return DEFAULT_CALL_OUTCOMES.filter(o => o.category === 'UNCONNECTED');
 }
 
 export function getOutcomeById(id?: string): CallOutcomeConfig | undefined {

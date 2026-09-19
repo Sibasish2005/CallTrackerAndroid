@@ -115,11 +115,11 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
   };
 
   const handleWhatsAppPress = (lead: LeadItem) => {
-    const isPendingCall = lead.status === 'NEW' || lead.status === 'ASSIGNED';
+    const isPendingCall = !lead.hasConnectedCall || lead.status === 'NEW' || lead.status === 'ASSIGNED';
     if (isPendingCall) {
       Alert.alert(
         'Call Required Before WhatsApp',
-        'Please call the student first through Heeyaku. The mandatory KPI disposition modal will appear right after the call to submit discussion outcome and unlock WhatsApp.',
+        'Please call and connect with the student first through Heeyaku (talk time > 0s). WhatsApp is unlocked once a connected discussion is recorded.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -158,13 +158,15 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
     const isNew = item.status === 'NEW' || item.status === 'ASSIGNED';
     const isContacted = item.status === 'CONTACTED';
     const isConverted = item.status === 'CONVERTED';
-    // WhatsApp button is enabled strictly and ONLY after a disposition option has been selected
-    const isWhatsAppDisabled = isNew;
+    const hasConnectedCall = Boolean(item.hasConnectedCall);
+
+    // WhatsApp button is enabled strictly and ONLY if there is a verified connected call
+    const isWhatsAppDisabled = !hasConnectedCall || isNew || ['NO_ANSWER', 'BUSY', 'WRONG_NUMBER'].includes(item.status);
 
     return (
       <Card variant="default" style={styles.leadCard}>
-        {/* Contacted Watermark Stamp */}
-        {!isNew && (
+        {/* Contacted Watermark Stamp: ONLY shown if connected call exists and status is contacted/converted */}
+        {hasConnectedCall && (isContacted || isConverted) && (
           <View style={styles.contactedWatermark} pointerEvents="none">
             <Text style={styles.contactedWatermarkText}>CONTACTED</Text>
           </View>
@@ -322,6 +324,7 @@ export const LeadsScreen: React.FC<LeadsScreenProps> = ({ onMakeCall }) => {
           setActiveDispositionLead(null);
         }}
         onSuccess={handleLeadUpdated}
+        onMakeCall={(phone, name) => onMakeCall(phone, name)}
       />
     </View>
 

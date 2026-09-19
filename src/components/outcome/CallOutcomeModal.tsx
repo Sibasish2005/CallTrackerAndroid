@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -30,9 +30,20 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (call) {
+      if (!call.connected) {
+        setSelectedOutcomeId('no_answer');
+      } else {
+        setSelectedOutcomeId('contacted');
+      }
+      setNotes('');
+    }
+  }, [call?.id, call?.connected]);
+
   if (!call) return null;
 
-  const isConnected = call.connected;
+  const isConnected = Boolean(call.connected);
   const duration = call.durationSeconds ?? call.duration ?? 0;
   const outcomes = getOutcomesForCall(isConnected);
 
@@ -83,7 +94,9 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
           {/* Mandatory Gate Notice Banner */}
           <View style={styles.noticeBanner}>
             <Text style={styles.noticeText}>
-              ⚠️ Mandatory KPI: Record the discussion outcome to update dashboard metrics and unlock WhatsApp.
+              {isConnected
+                ? '⚠️ Mandatory KPI: Record the discussion outcome to update dashboard metrics and unlock WhatsApp.'
+                : '📞 Call Not Connected: Call ended with 0s talk time. Record telecom status (No Answer / Busy / Wrong Number).'}
             </Text>
           </View>
 

@@ -25,6 +25,7 @@ export interface LeadItem {
   notes?: string | null;
   assignedAt?: string | null;
   updatedAt?: string | null;
+  hasConnectedCall?: boolean;
 }
 
 interface LeadDispositionModalProps {
@@ -33,18 +34,28 @@ interface LeadDispositionModalProps {
   thenOpenWhatsApp?: boolean;
   onClose: () => void;
   onSuccess: (updatedLead: LeadItem) => void;
+  onMakeCall?: (phoneNumber: string, name: string) => void;
 }
 
+const CONNECTED_STATUS_IDS = new Set([
+  'CONTACTED',
+  'INTERESTED',
+  'FOLLOW_UP',
+  'CALL_BACK',
+  'CONVERTED',
+  'NOT_INTERESTED',
+]);
+
 const STATUS_OPTIONS = [
-  { id: 'CONTACTED', label: 'Contacted (Spoke with Student)' },
-  { id: 'INTERESTED', label: 'Interested (Wants Details/Demo)' },
-  { id: 'FOLLOW_UP', label: 'Follow Up Scheduled' },
-  { id: 'CALL_BACK', label: 'Student Requested Call Back' },
-  { id: 'CONVERTED', label: 'Converted / Admitted' },
-  { id: 'NO_ANSWER', label: 'No Answer / Ringing' },
-  { id: 'BUSY', label: 'Busy / Disconnected' },
-  { id: 'WRONG_NUMBER', label: 'Wrong Number' },
-  { id: 'NOT_INTERESTED', label: 'Not Interested' },
+  { id: 'CONTACTED', label: 'Contacted (Spoke with Student)', requiresCall: true },
+  { id: 'INTERESTED', label: 'Interested (Wants Details/Demo)', requiresCall: true },
+  { id: 'FOLLOW_UP', label: 'Follow Up Scheduled', requiresCall: true },
+  { id: 'CALL_BACK', label: 'Student Requested Call Back', requiresCall: true },
+  { id: 'CONVERTED', label: 'Converted / Admitted', requiresCall: true },
+  { id: 'NOT_INTERESTED', label: 'Not Interested', requiresCall: true },
+  { id: 'NO_ANSWER', label: 'No Answer / Ringing', requiresCall: false },
+  { id: 'BUSY', label: 'Busy / Disconnected', requiresCall: false },
+  { id: 'WRONG_NUMBER', label: 'Wrong Number', requiresCall: false },
 ];
 
 export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
@@ -53,17 +64,28 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
   thenOpenWhatsApp = false,
   onClose,
   onSuccess,
+  onMakeCall,
 }) => {
-  const [selectedStatus, setSelectedStatus] = useState<string>('CONTACTED');
+  const [selectedStatus, setSelectedStatus] = useState<string>('NO_ANSWER');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const hasConnectedCall = Boolean(lead?.hasConnectedCall);
+
   useEffect(() => {
     if (lead) {
-      setSelectedStatus(
-        lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'CONTACTED' : lead.status
-      );
+      const isConnected = Boolean(lead.hasConnectedCall);
+      if (isConnected) {
+        setSelectedStatus(
+          lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'CONTACTED' : lead.status
+        );
+      } else {
+        // STRICT RULE: Unconnected leads NEVER default to Contacted!
+        setSelectedStatus(
+          lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'NO_ANSWER' : lead.status
+        );
+      }
       setNotes('');
       setError(null);
     }
@@ -71,7 +93,21 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
 
   if (!visible || !lead) return null;
 
+  const handleSelectStatus = (optionId: string, requiresCall: boolean) => {
+    if (requiresCall && !hasConnectedCall) {
+      setError('Cannot mark as Contacted without a connected call (talk time > 0s). Please call the student first.');
+      return;
+    }
+    setError(null);
+    setSelectedStatus(optionId);
+  };
+
   const handleSubmit = async () => {
+    if (CONNECTED_STATUS_IDS.has(selectedStatus) && !hasConnectedCall) {
+      setError('Cannot save Contacted or Interested status without a verified connected call.');
+      return;
+    }
+
     setError(null);
     setSubmitting(true);
 
@@ -127,7 +163,7 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
         <View style={styles.modalCard}>
           {/* Header */}
           <View style={styles.header}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.modalTitle}>
                 {thenOpenWhatsApp ? 'Update KPI to Unlock WhatsApp' : 'Update Lead Disposition (KPI)'}
               </Text>
@@ -140,10 +176,33 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
             </TouchableOpacity>
           </View>
 
+          {/* Unconnected Warning & Call CTA */}
+          {!hasConnectedCall && (
+            <View style={styles.noCallBanner}>
+              <View style={styles.noCallHeader}>
+                <Text style={styles.noCallTitle}>📞 No Connected Call Yet</Text>
+                {onMakeCall && (
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      onClose();
+                      onMakeCall(lead.phoneNumber, lead.name);
+                    }}
+                    style={styles.callNowBtn}>
+                    <Text style={styles.callNowBtnText}>Call Now</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={styles.noCallText}>
+                A connected call (talk time &gt; 0s) is strictly required to mark this student as Contacted or Interested.
+              </Text>
+            </View>
+          )}
+
           {thenOpenWhatsApp && (
             <View style={styles.noticeBanner}>
               <Text style={styles.noticeText}>
-              Please log discussion outcome to the database before redirecting to WhatsApp.
+                Please log discussion outcome to the database before redirecting to WhatsApp.
               </Text>
             </View>
           )}
@@ -160,16 +219,34 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
             <View style={styles.optionsContainer}>
               {STATUS_OPTIONS.map((opt) => {
                 const isSelected = selectedStatus === opt.id;
+                const isLocked = opt.requiresCall && !hasConnectedCall;
+
                 return (
                   <TouchableOpacity
                     key={opt.id}
-                    activeOpacity={0.7}
-                    onPress={() => setSelectedStatus(opt.id)}
-                    style={[styles.statusOption, isSelected && styles.statusOptionSelected]}>
-                    <Text style={[styles.statusOptionText, isSelected && styles.statusOptionTextSelected]}>
-                      {opt.label}
-                    </Text>
-                    {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                    activeOpacity={isLocked ? 0.9 : 0.7}
+                    onPress={() => handleSelectStatus(opt.id, opt.requiresCall)}
+                    style={[
+                      styles.statusOption,
+                      isSelected && styles.statusOptionSelected,
+                      isLocked && styles.statusOptionLocked,
+                    ]}>
+                    <View style={styles.statusOptionContent}>
+                      <Text
+                        style={[
+                          styles.statusOptionText,
+                          isSelected && styles.statusOptionTextSelected,
+                          isLocked && styles.statusOptionTextLocked,
+                        ]}>
+                        {opt.label}
+                      </Text>
+                      {isLocked && (
+                        <View style={styles.lockBadge}>
+                          <Text style={styles.lockBadgeText}>🔒 Call Required</Text>
+                        </View>
+                      )}
+                    </View>
+                    {isSelected && !isLocked && <Text style={styles.checkIcon}>✓</Text>}
                   </TouchableOpacity>
                 );
               })}
@@ -255,6 +332,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  noCallBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.25)',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+  },
+  noCallHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  noCallTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FBBF24',
+  },
+  noCallText: {
+    fontSize: 10,
+    color: '#FCD34D',
+    lineHeight: 14,
+  },
+  callNowBtn: {
+    backgroundColor: COLORS.brandBlue,
+    paddingHorizontal: SPACING.sm + 2,
+    paddingVertical: 3,
+    borderRadius: RADII.sm,
+  },
+  callNowBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.monoWhite,
+  },
   noticeBanner: {
     backgroundColor: 'rgba(56, 189, 248, 0.1)',
     borderBottomWidth: 1,
@@ -305,9 +416,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: 10,
   },
+  statusOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flex: 1,
+    marginRight: 8,
+  },
   statusOptionSelected: {
     backgroundColor: 'rgba(37, 99, 235, 0.15)',
     borderColor: COLORS.brandBlue,
+  },
+  statusOptionLocked: {
+    opacity: 0.55,
+    backgroundColor: 'rgba(15, 23, 42, 0.4)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   statusOptionText: {
     fontSize: 12,
@@ -316,6 +439,20 @@ const styles = StyleSheet.create({
   statusOptionTextSelected: {
     color: COLORS.monoWhite,
     fontWeight: '700',
+  },
+  statusOptionTextLocked: {
+    color: COLORS.textTertiary,
+  },
+  lockBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  lockBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#F59E0B',
   },
   checkIcon: {
     color: COLORS.brandCyan,

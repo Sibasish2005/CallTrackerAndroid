@@ -262,7 +262,18 @@ export function useCallTracker() {
         const callNum = targetCall?.phoneNumber || targetCall?.number;
         const matchedLead = assignedLeadsService.findAssignedLead(callNum);
         if (matchedLead) {
-          matchedLead.status = outcomeId.toUpperCase();
+          const isCallConnected = Boolean(targetCall?.connected);
+          const connectedStatusSet = new Set(['CONTACTED', 'INTERESTED', 'CONVERTED', 'FOLLOW_UP', 'CALL_BACK']);
+          const upperOutcome = outcomeId.toUpperCase();
+
+          if (isCallConnected) {
+            matchedLead.hasConnectedCall = true;
+            matchedLead.status = upperOutcome;
+          } else {
+            // Unconnected calls cannot transition to Contacted or Interested
+            matchedLead.status = connectedStatusSet.has(upperOutcome) ? 'NO_ANSWER' : upperOutcome;
+          }
+
           if (finalNotes?.trim()) {
             matchedLead.notes = matchedLead.notes
               ? `${matchedLead.notes}\n${finalNotes.trim()}`
@@ -280,18 +291,24 @@ export function useCallTracker() {
       if (targetCall) {
         const callNum = targetCall.phoneNumber || targetCall.number;
         const matchedLead = assignedLeadsService.findAssignedLead(callNum);
+        const isCallConnected = Boolean(targetCall.connected);
+        const connectedOutcomes = ['contacted', 'interested', 'converted', 'follow_up', 'call_back', 'not_interested', 'not_qualified'];
+        const safeOutcomeId = (!isCallConnected && connectedOutcomes.includes(outcomeId.toLowerCase()))
+          ? 'no_answer'
+          : outcomeId;
+
         const syncPayload = {
           id: callId,
           leadId: targetCall.leadId || matchedLead?.id,
           phoneNumber: callNum,
           contactName: targetCall.contactName || targetCall.name || matchedLead?.name,
           callType: targetCall.callType || 'OUTGOING',
-          durationSeconds: targetCall.connected
+          durationSeconds: isCallConnected
             ? (targetCall.durationSeconds ?? targetCall.duration ?? 0)
             : 0,
-          connected: targetCall.connected,
-          outcomeId,
-          outcomeLabel: outcomeId,
+          connected: isCallConnected,
+          outcomeId: safeOutcomeId,
+          outcomeLabel: safeOutcomeId,
           notes: notes?.trim() || undefined,
           startedAt: targetCall.startedAt || targetCall.date,
           endedAt: targetCall.endedAt,
