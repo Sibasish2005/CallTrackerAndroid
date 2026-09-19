@@ -138,7 +138,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       </Card>
 
       {/* LIVE CRM OUTPUT & METRICS */}
-      <Text style={styles.sectionTitle}>LIVE CRM ACTIVITY</Text>
+      <Text style={styles.sectionTitle}>TODAY'S SUMMARY</Text>
       <Card variant="default" style={styles.card}>
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
@@ -158,8 +158,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
       </Card>
 
-      {/* MY WORK IDENTITY */}
-      <Text style={styles.sectionTitle}>MY WORK IDENTITY</Text>
+      {/* ACCOUNT DETAILS */}
+      <Text style={styles.sectionTitle}>ACCOUNT DETAILS</Text>
       <Card variant="default" style={styles.card}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Employee Code</Text>
@@ -179,11 +179,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
       </Card>
 
-      {/* TELEPHONY TELEMETRY APP STATUS */}
-      <Text style={styles.sectionTitle}>APP TELEPHONY STATUS</Text>
+      {/* PHONE & TRACKING */}
+      <Text style={styles.sectionTitle}>PHONE & TRACKING</Text>
       <Card variant="default" style={styles.card}>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Call Tracker Engine</Text>
+          <Text style={styles.infoLabel}>Call Tracker</Text>
           <View style={styles.statusPill}>
             <View
               style={[
@@ -217,10 +217,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         activeOpacity={0.8}
         onPress={handleLogout}
         style={styles.logoutButton}>
-        <Text style={styles.logoutButtonText}>Sign Out of Workspace</Text>
+        <Text style={styles.logoutButtonText}>Sign Out</Text>
       </TouchableOpacity>
 
-      {/* Fancy Theme-Matched Sign Out Modal */}
+      {/* Sign Out Modal */}
       <Modal
         visible={showLogoutModal}
         transparent
@@ -228,15 +228,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         onRequestClose={() => setShowLogoutModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            {/* Soft Danger Icon Badge */}
-            <View style={styles.modalIconBox}>
-              <Text style={styles.modalIconText}>🚪</Text>
-            </View>
-
             {/* Title & Description */}
             <Text style={styles.modalTitle}>Sign Out</Text>
             <Text style={styles.modalDescription}>
-              Are you sure you want to sign out of your workspace? You will need your credentials to log back in.
+              Are you sure you want to sign out? You will need your credentials to log back in.
             </Text>
 
             {/* Action Buttons */}

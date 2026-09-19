@@ -16,34 +16,34 @@ export const TodayHeroCard: React.FC<TodayHeroCardProps> = ({ metrics }) => {
     <View style={styles.heroCard}>
       {/* Top Header Row */}
       <View style={styles.heroTopRow}>
-        <Text style={styles.heroPreTitle}>{"Today's schedule"}</Text>
+        <Text style={styles.heroPreTitle}>TODAY'S ACTIVITY</Text>
 
-        {/* Right indicator: Pill badge + connector line + vertical progress bar */}
-        <View style={styles.verticalBarGroup}>
-          <View style={styles.pillBadge}>
-            <Text style={styles.pillBadgeText}>{connectionRate}%</Text>
-          </View>
-          <View style={styles.pillConnector} />
-          <View style={styles.verticalTrack}>
-            <View
-              style={[
-                styles.verticalFill,
-                {
-                  height: `${Math.min(100, Math.max(10, connectionRate))}%`,
-                },
-              ]}
-            />
-          </View>
+        <View style={styles.ratePill}>
+          <View style={styles.rateDot} />
+          <Text style={styles.ratePillText}>{connectionRate}% connected</Text>
         </View>
       </View>
 
       {/* Main Stat: Giant number + label */}
       <View style={styles.heroStatRow}>
         <Text style={styles.heroGiantNumber}>{connectedCalls}</Text>
-        <Text style={styles.heroStatLabel}>calls connected</Text>
+        <Text style={styles.heroStatLabel}>
+          {connectedCalls === 1 ? 'call connected' : 'calls connected'}
+        </Text>
       </View>
 
-      {/* Subtitle Talk Time text in human language */}
+      {/* Talk Time & Micro Progress Track */}
+      <View style={styles.progressRow}>
+        <View style={styles.progressBarTrack}>
+          <View
+            style={[
+              styles.progressBarFill,
+              { width: `${Math.min(100, Math.max(4, connectionRate))}%` },
+            ]}
+          />
+        </View>
+      </View>
+
       <Text style={styles.heroTalkTimeSubtext}>
         Total talk time: {talkTime}
       </Text>
@@ -53,78 +53,82 @@ export const TodayHeroCard: React.FC<TodayHeroCardProps> = ({ metrics }) => {
 
 const styles = StyleSheet.create({
   heroCard: {
-    backgroundColor: '#1C1D22',
-    borderRadius: 18,
+    backgroundColor: '#18191E',
+    borderRadius: 14,
     padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#272932',
+    borderColor: '#24262E',
   },
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  heroPreTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#8D919C',
-    letterSpacing: 0.2,
-  },
-  verticalBarGroup: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
-  pillBadge: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  heroPreTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8D919C',
+    letterSpacing: 0.8,
+  },
+  ratePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#20222A',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2A2D37',
   },
-  pillBadgeText: {
-    color: '#121316',
+  rateDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34D399',
+  },
+  ratePillText: {
+    color: '#EDEDED',
     fontSize: 12,
-    fontWeight: '800',
-  },
-  pillConnector: {
-    width: 8,
-    height: 1.5,
-    backgroundColor: '#FFFFFF',
-  },
-  verticalTrack: {
-    width: 4,
-    height: 46,
-    borderRadius: 2,
-    backgroundColor: '#2D2F38',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  verticalFill: {
-    width: 4,
-    borderRadius: 2,
-    backgroundColor: '#1D7BF6',
+    fontWeight: '700',
   },
   heroStatRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 12,
+    marginBottom: 8,
   },
   heroGiantNumber: {
-    fontSize: 42,
+    fontSize: 40,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#EDEDED',
     letterSpacing: -0.5,
   },
   heroStatLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#C2C5CE',
+    color: '#8D919C',
     marginLeft: 10,
+  },
+  progressRow: {
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  progressBarTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#24262E',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: '#38BDF8',
   },
   heroTalkTimeSubtext: {
     fontSize: 12,
     color: '#8D919C',
-    marginTop: 6,
+    marginTop: 4,
   },
 });

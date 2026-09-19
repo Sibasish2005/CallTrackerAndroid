@@ -93,7 +93,7 @@ export const CallsScreen: React.FC<CallsScreenProps> = ({
       <View style={styles.headerContainer}>
         {/* Quick Dialer Card */}
         <Card variant="default" style={styles.dialerCard}>
-          <Text style={styles.dialerLabel}>QUICK CELLULAR DIALER</Text>
+          <Text style={styles.dialerLabel}>DIAL NUMBER</Text>
           <View style={styles.dialerInputRow}>
             <View style={styles.phoneInputWrapper}>
               <TextInput

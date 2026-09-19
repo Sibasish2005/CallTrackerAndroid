@@ -40,7 +40,7 @@ const STATUS_OPTIONS = [
   { id: 'INTERESTED', label: 'Interested (Wants Details/Demo)' },
   { id: 'FOLLOW_UP', label: 'Follow Up Scheduled' },
   { id: 'CALL_BACK', label: 'Student Requested Call Back' },
-  { id: 'CONVERTED', label: 'Converted / Admitted 🎉' },
+  { id: 'CONVERTED', label: 'Converted / Admitted' },
   { id: 'NO_ANSWER', label: 'No Answer / Ringing' },
   { id: 'BUSY', label: 'Busy / Disconnected' },
   { id: 'WRONG_NUMBER', label: 'Wrong Number' },

@@ -129,6 +129,22 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
 
   const totalCallsCount = activeMetrics.totalAttempts;
 
+  // Real outcomes that actually have records logged, sorted highest first
+  const loggedOutcomes = useMemo(() => {
+    return DEFAULT_CALL_OUTCOMES
+      .map((outcome) => {
+        const count = activeMetrics.outcomeDistribution[outcome.id] || 0;
+        const pct = totalCallsCount > 0 ? Math.round((count / totalCallsCount) * 100) : 0;
+        return { ...outcome, count, pct };
+      })
+      .filter((o) => o.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, [activeMetrics.outcomeDistribution, totalCallsCount]);
+
+  const totalLoggedOutcomesCount = useMemo(() => {
+    return loggedOutcomes.reduce((sum, o) => sum + o.count, 0);
+  }, [loggedOutcomes]);
+
   // Day-by-day subpage
   if (showDailyBreakdown) {
     return (
@@ -323,55 +339,55 @@ export const AnalyticsScreen: React.FC<AnalyticsScreenProps> = ({
       {/* Call Outcome Distribution */}
       <View style={styles.card}>
         <View style={styles.outcomeCardHeader}>
-          <Text style={styles.sectionHeaderTitle}>Call Outcomes</Text>
+          <View>
+            <Text style={styles.sectionHeaderTitle}>Call Outcomes</Text>
+            <Text style={styles.sectionHeaderSubtitle}>
+              {totalLoggedOutcomesCount > 0
+                ? `${totalLoggedOutcomesCount} marked outcome${totalLoggedOutcomesCount === 1 ? '' : 's'}`
+                : 'Disposition summary'}
+            </Text>
+          </View>
           <Text style={styles.sectionHeaderMeta}>
-            {totalCallsCount} {totalCallsCount === 1 ? 'call' : 'calls'}
+            {totalCallsCount} {totalCallsCount === 1 ? 'total call' : 'total calls'}
           </Text>
         </View>
 
-        {/* Proportional Stacked Ratio Bar */}
-        {totalCallsCount > 0 ? (
-          <View style={styles.stackedBar}>
-            {DEFAULT_CALL_OUTCOMES.map((outcome) => {
-              const count = activeMetrics.outcomeDistribution[outcome.id] || 0;
-              if (count === 0) return null;
-              const flexWeight = count / totalCallsCount;
-              return (
-                <View
-                  key={outcome.id}
-                  style={[
-                    styles.stackedSegment,
-                    { flex: flexWeight, backgroundColor: outcome.color },
-                  ]}
-                />
-              );
-            })}
+        {loggedOutcomes.length === 0 ? (
+          <View style={styles.outcomeEmptyState}>
+            <Text style={styles.outcomeEmptyTitle}>No outcomes recorded</Text>
+            <Text style={styles.outcomeEmptySubtitle}>
+              Call outcomes marked after calls will appear here.
+            </Text>
           </View>
         ) : (
-          <View style={styles.emptyBar} />
-        )}
-
-        {/* Outcome Item Rows */}
-        <View style={styles.outcomeList}>
-          {DEFAULT_CALL_OUTCOMES.map((outcome) => {
-            const count = activeMetrics.outcomeDistribution[outcome.id] || 0;
-            const pct =
-              totalCallsCount > 0 ? Math.round((count / totalCallsCount) * 100) : 0;
-
-            return (
-              <View key={outcome.id} style={styles.outcomeRow}>
-                <View style={styles.outcomeLeft}>
-                  <View style={[styles.outcomeDot, { backgroundColor: outcome.color }]} />
-                  <Text style={styles.outcomeLabel}>{outcome.label}</Text>
+          <View style={styles.outcomeList}>
+            {loggedOutcomes.map((item) => (
+              <View key={item.id} style={styles.outcomeItemContainer}>
+                <View style={styles.outcomeRowTop}>
+                  <View style={styles.outcomeLeft}>
+                    <View style={[styles.outcomeIndicator, { backgroundColor: item.color }]} />
+                    <Text style={styles.outcomeLabel}>{item.label}</Text>
+                  </View>
+                  <View style={styles.outcomeRight}>
+                    <Text style={styles.outcomeCount}>{item.count} {item.count === 1 ? 'call' : 'calls'}</Text>
+                    <Text style={styles.outcomePercent}>{item.pct}%</Text>
+                  </View>
                 </View>
-                <View style={styles.outcomeRight}>
-                  <Text style={styles.outcomeCount}>{count}</Text>
-                  <Text style={styles.outcomePercent}>{pct}%</Text>
+                <View style={styles.outcomeProgressBarTrack}>
+                  <View
+                    style={[
+                      styles.outcomeProgressBarFill,
+                      {
+                        width: `${Math.min(100, Math.max(5, item.pct))}%`,
+                        backgroundColor: item.color,
+                      },
+                    ]}
+                  />
                 </View>
               </View>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Day-by-Day Activity link inside month tab */}
         {selectedTab === 'month' && (
@@ -556,75 +572,111 @@ const styles = StyleSheet.create({
   outcomeCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   sectionHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#EDEDED',
+    letterSpacing: -0.2,
+  },
+  sectionHeaderSubtitle: {
+    fontSize: 12,
+    color: '#8B8F9A',
+    marginTop: 2,
   },
   sectionHeaderMeta: {
     fontSize: 12,
+    fontWeight: '600',
     color: '#8B8F9A',
+    backgroundColor: '#20222A',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
 
-  /* Stacked Ratio Bar */
-  stackedBar: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#24262E',
-    flexDirection: 'row',
-    overflow: 'hidden',
-    marginBottom: 16,
+  /* Empty state */
+  outcomeEmptyState: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#141519',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#24262E',
   },
-  stackedSegment: {
-    height: '100%',
+  outcomeEmptyTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#EDEDED',
+    marginBottom: 4,
   },
-  emptyBar: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#24262E',
-    marginBottom: 16,
+  outcomeEmptySubtitle: {
+    fontSize: 12,
+    color: '#8B8F9A',
+    textAlign: 'center',
   },
 
+  /* Outcome Item Rows with Progress Bars */
   outcomeList: {
-    gap: 10,
+    gap: 12,
   },
-  outcomeRow: {
+  outcomeItemContainer: {
+    backgroundColor: '#141519',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#22242C',
+  },
+  outcomeRowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
   outcomeLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
   },
-  outcomeDot: {
-    width: 7,
-    height: 7,
+  outcomeIndicator: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   outcomeLabel: {
     fontSize: 13,
-    color: '#D4D6DC',
+    fontWeight: '600',
+    color: '#EDEDED',
   },
   outcomeRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   outcomeCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#EDEDED',
+    fontSize: 12,
+    color: '#8B8F9A',
   },
   outcomePercent: {
     fontSize: 12,
-    color: '#8B8F9A',
-    width: 32,
+    fontWeight: '700',
+    color: '#EDEDED',
+    minWidth: 32,
     textAlign: 'right',
+  },
+  outcomeProgressBarTrack: {
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#22242D',
+    overflow: 'hidden',
+  },
+  outcomeProgressBarFill: {
+    height: '100%',
+    borderRadius: 2.5,
   },
 
   dayBreakdownLink: {

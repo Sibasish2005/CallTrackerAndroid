@@ -69,14 +69,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
         <View style={styles.brandHeader}>
           <HeeyakuLogo size={42} />
           <Text style={styles.brandTitle}>HEEYAKU</Text>
-          <Text style={styles.brandSubtitle}>Business Development Associate OS</Text>
+          <Text style={styles.brandSubtitle}>Counselor Workspace</Text>
         </View>
 
         {/* Title */}
         <View style={styles.titleSection}>
-          <Text style={styles.loginTitle}>BDA Staff Sign In</Text>
+          <Text style={styles.loginTitle}>Counselor Sign In</Text>
           <Text style={styles.loginDescription}>
-            Enter your admin-issued credentials to access assigned student leads and call tracking.
+            Enter your employee code and password to access your student leads.
           </Text>
         </View>
 

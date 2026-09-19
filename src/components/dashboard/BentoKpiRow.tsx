@@ -20,10 +20,12 @@ export const BentoKpiRow: React.FC<BentoKpiRowProps> = ({
 
   return (
     <View style={styles.middleRow}>
-      {/* Left Card (Widget 2): Connection Rate */}
+      {/* Left Card: Connection Rate */}
       <View style={styles.halfCard}>
         <Text style={styles.cardHighlightedTitle}>Connection Rate</Text>
-        <Text style={styles.cardSubtitle}>Daily performance</Text>
+        <Text style={styles.cardSubtitle}>
+          {metrics.totalConnected} of {metrics.totalAttempts} answered
+        </Text>
 
         <Text style={styles.cardGiantNumber}>{connectionRate}%</Text>
 
@@ -32,17 +34,17 @@ export const BentoKpiRow: React.FC<BentoKpiRowProps> = ({
             style={[
               styles.horizontalFill,
               {
-                width: `${Math.min(100, Math.max(8, connectionRate))}%`,
+                width: `${Math.min(100, Math.max(metrics.totalAttempts > 0 ? 4 : 0, connectionRate))}%`,
               },
             ]}
           />
         </View>
       </View>
 
-      {/* Right Card (Widget 3 - Home Section Three): Real Call Duration Timer */}
+      {/* Right Card: Talk Time */}
       <View style={[styles.halfCard, isOffhook && styles.halfCardActive]}>
         <View style={styles.cardTitleRow}>
-          <Text style={styles.cardHighlightedTitle}>Real Call Timer</Text>
+          <Text style={styles.cardHighlightedTitle}>Talk Time</Text>
           {isOffhook && (
             <View style={styles.liveIndicatorPill}>
               <View style={styles.liveIndicatorDot} />
@@ -51,18 +53,12 @@ export const BentoKpiRow: React.FC<BentoKpiRowProps> = ({
           )}
         </View>
         <Text style={styles.cardSubtitle}>
-          {isOffhook ? 'Connected talk time' : 'Real talk time today'}
+          {isOffhook ? 'Current active call' : `Avg ${avgDuration} / call`}
         </Text>
 
         <Text style={[styles.cardGiantNumber, isOffhook && styles.cardGiantNumberActive]}>
           {isOffhook ? formatDuration(currentDuration) : totalTalkTime}
         </Text>
-
-        <View style={styles.metaRow}>
-          <Text style={styles.metaSubtext}>
-            {isOffhook ? 'Live conversation' : `Avg ${avgDuration}/call`}
-          </Text>
-        </View>
 
         <View style={styles.horizontalTrack}>
           <View
@@ -71,8 +67,8 @@ export const BentoKpiRow: React.FC<BentoKpiRowProps> = ({
               isOffhook && styles.horizontalFillActive,
               {
                 width: isOffhook
-                  ? `${Math.min(100, Math.max(15, (currentDuration % 60) * 1.6))}%`
-                  : `${Math.min(100, Math.max(10, metrics.totalConnected > 0 ? 68 : 8))}%`,
+                  ? `${Math.min(100, Math.max(10, ((currentDuration % 60) / 60) * 100))}%`
+                  : `${Math.min(100, Math.max(0, metrics.totalConnected > 0 ? (metrics.averageDurationSeconds / 180) * 100 : 0))}%`,
               },
             ]}
           />
