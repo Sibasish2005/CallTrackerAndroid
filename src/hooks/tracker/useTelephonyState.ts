@@ -135,10 +135,9 @@ export function useTelephonyState({
         const { duration = 0, number = '', name = '', date = Date.now(), id, connected = false } = data;
         const callDuration = Number(duration) || 0;
 
-        // Strict Real Connected Duration: ONLY count seconds actually spoken (recorded by Android RIL)
-        // If the call was rejected, unanswered, or canceled while ringing, callDuration is strictly 0 and connected is false.
-        const isCallConnected = Boolean(connected && callDuration > 0);
-        const realCallDuration = isCallConnected ? callDuration : 0;
+        // Real Connected Duration: count as connected if native layer marked connected or duration > 0
+        const isCallConnected = Boolean(connected || callDuration > 0);
+        const realCallDuration = callDuration > 0 ? callDuration : (isCallConnected ? 1 : 0);
 
         const recordId = id ? String(id) : `${date}_${Date.now()}`;
         const finalNumber = number || activeNumberRef.current || 'Outgoing Call';

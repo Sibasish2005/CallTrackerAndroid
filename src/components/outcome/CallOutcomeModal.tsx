@@ -26,34 +26,61 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
   visible,
   onSave,
 }) => {
+  const duration = call ? (call.durationSeconds ?? call.duration ?? 0) : 0;
+  const initialConnected = Boolean(call?.connected || duration > 0);
+  const [callWasAnswered, setCallWasAnswered] = useState<boolean>(initialConnected);
   const [selectedOutcomeId, setSelectedOutcomeId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (call) {
-      if (!call.connected) {
+      const dur = call.durationSeconds ?? call.duration ?? 0;
+      const isConn = Boolean(call.connected || dur > 0);
+      setCallWasAnswered(isConn);
+      if (!isConn) {
         setSelectedOutcomeId('no_answer');
       } else {
         setSelectedOutcomeId('contacted');
       }
       setNotes('');
     }
-  }, [call?.id, call?.connected]);
+  }, [call?.id, call?.connected, call?.duration, call?.durationSeconds]);
 
   if (!call) return null;
 
-  const isConnected = Boolean(call.connected);
-  const duration = call.durationSeconds ?? call.duration ?? 0;
+  const isConnected = callWasAnswered;
   const outcomes = getOutcomesForCall(isConnected);
 
   const selectedOutcome = outcomes.find(o => o.id === selectedOutcomeId);
   const canSubmit = Boolean(selectedOutcomeId) && !submitting;
 
+  const handleToggleAnswered = (answered: boolean) => {
+    setCallWasAnswered(answered);
+    if (answered) {
+      if (!selectedOutcomeId || selectedOutcomeId === 'no_answer' || selectedOutcomeId === 'busy' || selectedOutcomeId === 'wrong_number') {
+        setSelectedOutcomeId('contacted');
+      }
+    } else {
+      setSelectedOutcomeId('no_answer');
+    }
+  };
+
   const handleSave = async () => {
     if (!selectedOutcomeId || submitting) return;
     setSubmitting(true);
     try {
+      if (callWasAnswered) {
+        call.connected = true;
+        if (!call.durationSeconds && !call.duration) {
+          call.durationSeconds = 1;
+          call.duration = 1;
+        }
+      } else {
+        call.connected = false;
+        call.durationSeconds = 0;
+        call.duration = 0;
+      }
       await onSave(call.id, selectedOutcomeId, notes.trim());
       setSelectedOutcomeId(null);
       setNotes('');
@@ -84,19 +111,39 @@ export const CallOutcomeModal: React.FC<CallOutcomeModalProps> = ({
               </Text>
             </View>
 
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>
-                {isConnected ? `Connected • ${formatVerboseDuration(duration)}` : 'Not Connected'}
+            <View style={[styles.statusBadge, isConnected ? styles.statusBadgeConnected : styles.statusBadgeUnconnected]}>
+              <Text style={[styles.statusText, isConnected ? styles.statusTextConnected : styles.statusTextUnconnected]}>
+                {isConnected ? `Connected • ${formatVerboseDuration(Math.max(duration, 1))}` : 'Not Connected'}
               </Text>
             </View>
+          </View>
+
+          {/* Answered / Not Answered Tab Bar */}
+          <View style={styles.connectionToggleContainer}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => handleToggleAnswered(true)}
+              style={[styles.connectionTab, isConnected && styles.connectionTabActive]}>
+              <Text style={[styles.connectionTabText, isConnected && styles.connectionTabTextActive]}>
+                📞 Spoke with Contact
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => handleToggleAnswered(false)}
+              style={[styles.connectionTab, !isConnected && styles.connectionTabUnconnectedActive]}>
+              <Text style={[styles.connectionTabText, !isConnected && styles.connectionTabTextActive]}>
+                📵 No Answer / Busy
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Mandatory Gate Notice Banner */}
           <View style={styles.noticeBanner}>
             <Text style={styles.noticeText}>
               {isConnected
-                ? '⚠️ Mandatory KPI: Record the discussion outcome to update dashboard metrics and unlock WhatsApp.'
-                : '📞 Call Not Connected: Call ended with 0s talk time. Record telecom status (No Answer / Busy / Wrong Number).'}
+                ? 'Mandatory KPI: Record discussion outcome to update dashboard metrics and unlock WhatsApp.'
+                : 'Call Not Connected: Call ended with 0s talk time. Record telecom status.'}
             </Text>
           </View>
 
@@ -217,10 +264,60 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderMuted,
     backgroundColor: COLORS.surfaceSubtle,
   },
+  statusBadgeConnected: {
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  statusBadgeUnconnected: {
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
   statusText: {
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.monoSilver,
+  },
+  statusTextConnected: {
+    color: '#34D399',
+  },
+  statusTextUnconnected: {
+    color: '#FBBF24',
+  },
+  connectionToggleContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: COLORS.surface,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSubtle,
+  },
+  connectionTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: COLORS.borderMuted,
+  },
+  connectionTabActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderColor: '#10B981',
+  },
+  connectionTabUnconnectedActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: '#F59E0B',
+  },
+  connectionTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.monoSilver,
+  },
+  connectionTabTextActive: {
+    color: COLORS.monoWhite,
+    fontWeight: '800',
   },
   noticeBanner: {
     backgroundColor: 'rgba(56, 189, 248, 0.1)',

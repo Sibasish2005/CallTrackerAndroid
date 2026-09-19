@@ -106,16 +106,16 @@ export function useCallTracker() {
 
       // 2. IMMEDIATE BACKEND PERSISTENCE:
       // Strictly sync ONLY assigned lead calls with real connected duration
+      const initialDuration = enrichedRecord.durationSeconds ?? enrichedRecord.duration ?? 0;
+      const initialConnected = Boolean(enrichedRecord.connected || initialDuration > 0);
       const syncPayload = {
         id: enrichedRecord.id,
         leadId: enrichedRecord.leadId,
         phoneNumber: enrichedRecord.phoneNumber || enrichedRecord.number,
         contactName: enrichedRecord.contactName || enrichedRecord.name,
         callType: enrichedRecord.callType || 'OUTGOING',
-        durationSeconds: enrichedRecord.connected
-          ? (enrichedRecord.durationSeconds ?? enrichedRecord.duration ?? 0)
-          : 0,
-        connected: enrichedRecord.connected,
+        durationSeconds: initialConnected ? Math.max(initialDuration, 1) : 0,
+        connected: initialConnected,
         outcomeId: enrichedRecord.outcomeId,
         outcomeLabel: enrichedRecord.outcomeLabel,
         notes: enrichedRecord.notes,
@@ -261,16 +261,19 @@ export function useCallTracker() {
         // 4. Update assigned lead in memory cache
         const callNum = targetCall?.phoneNumber || targetCall?.number;
         const matchedLead = assignedLeadsService.findAssignedLead(callNum);
+        const targetDuration = targetCall?.durationSeconds ?? targetCall?.duration ?? 0;
+        const isCallConnected = Boolean(targetCall?.connected || targetDuration > 0);
+
         if (matchedLead) {
-          const isCallConnected = Boolean(targetCall?.connected);
           const connectedStatusSet = new Set(['CONTACTED', 'INTERESTED', 'CONVERTED', 'FOLLOW_UP', 'CALL_BACK']);
           const upperOutcome = outcomeId.toUpperCase();
+          const hasPriorOrCurrentConnected = isCallConnected || Boolean(matchedLead.hasConnectedCall);
 
-          if (isCallConnected) {
+          if (hasPriorOrCurrentConnected) {
             matchedLead.hasConnectedCall = true;
             matchedLead.status = upperOutcome;
           } else {
-            // Unconnected calls cannot transition to Contacted or Interested
+            // Unconnected calls without any prior connected history cannot transition to Contacted or Interested
             matchedLead.status = connectedStatusSet.has(upperOutcome) ? 'NO_ANSWER' : upperOutcome;
           }
 
@@ -291,9 +294,11 @@ export function useCallTracker() {
       if (targetCall) {
         const callNum = targetCall.phoneNumber || targetCall.number;
         const matchedLead = assignedLeadsService.findAssignedLead(callNum);
-        const isCallConnected = Boolean(targetCall.connected);
+        const targetDuration = targetCall.durationSeconds ?? targetCall.duration ?? 0;
+        const isCallConnected = Boolean(targetCall.connected || targetDuration > 0);
         const connectedOutcomes = ['contacted', 'interested', 'converted', 'follow_up', 'call_back', 'not_interested', 'not_qualified'];
-        const safeOutcomeId = (!isCallConnected && connectedOutcomes.includes(outcomeId.toLowerCase()))
+        const hasPriorOrCurrentConnected = isCallConnected || Boolean(matchedLead?.hasConnectedCall);
+        const safeOutcomeId = (!hasPriorOrCurrentConnected && connectedOutcomes.includes(outcomeId.toLowerCase()))
           ? 'no_answer'
           : outcomeId;
 
@@ -304,7 +309,7 @@ export function useCallTracker() {
           contactName: targetCall.contactName || targetCall.name || matchedLead?.name,
           callType: targetCall.callType || 'OUTGOING',
           durationSeconds: isCallConnected
-            ? (targetCall.durationSeconds ?? targetCall.duration ?? 0)
+            ? Math.max(targetDuration, 1)
             : 0,
           connected: isCallConnected,
           outcomeId: safeOutcomeId,

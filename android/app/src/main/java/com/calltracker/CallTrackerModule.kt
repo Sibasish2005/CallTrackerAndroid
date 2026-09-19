@@ -525,7 +525,7 @@ class CallTrackerModule(
         }
     }
 
-    private fun fetchLatestCallLogAndEmit(targetNumber: String, dialedTime: Long) {
+    private fun fetchLatestCallLogAndEmit(targetNumber: String, dialedTime: Long, offhookDuration: Long = 0L) {
         bgExecutor.execute {
             try {
                 val hasCallLogPerm = ContextCompat.checkSelfPermission(
@@ -533,8 +533,8 @@ class CallTrackerModule(
                     Manifest.permission.READ_CALL_LOG
                 ) == PackageManager.PERMISSION_GRANTED
 
-                var realDuration = 0L
-                var isConnected = false
+                var realDuration = if (offhookDuration >= 4L) offhookDuration else 0L
+                var isConnected = offhookDuration >= 4L
                 var contactName = ""
                 var finalNumber = targetNumber
                 var callDate = if (dialedTime > 0) dialedTime.toDouble() else System.currentTimeMillis().toDouble()
@@ -553,18 +553,17 @@ class CallTrackerModule(
                     CallLog.Calls.TYPE
                 )
 
-                // Poll CallLog with retries (Android OS takes 300ms - 1500ms to commit call duration after IDLE)
-                while (attempts < 4 && !callFound) {
-                    Thread.sleep(if (attempts == 0) 600 else 500)
+                // Poll CallLog with retries (Android OS takes 300ms - 2000ms to commit call duration after IDLE)
+                while (attempts < 5 && !callFound) {
+                    Thread.sleep(if (attempts == 0) 700 else 600)
                     attempts++
 
                     if (hasCallLogPerm) {
-                        val minDate = (if (dialedTime > 0) dialedTime - 10000 else System.currentTimeMillis() - 30000).toString()
                         val cursor = reactApplicationContext.contentResolver.query(
                             CallLog.Calls.CONTENT_URI,
                             projection,
-                            "${CallLog.Calls.DATE} >= ?",
-                            arrayOf(minDate),
+                            null,
+                            null,
                             "${CallLog.Calls.DATE} DESC"
                         )
 
@@ -575,12 +574,14 @@ class CallTrackerModule(
                             val dateIdx = it.getColumnIndex(CallLog.Calls.DATE)
                             val typeIdx = it.getColumnIndex(CallLog.Calls.TYPE)
 
-                            while (it.moveToNext()) {
+                            var rowsChecked = 0
+                            while (it.moveToNext() && rowsChecked < 15) {
+                                rowsChecked++
                                 val rowNum = if (numIdx >= 0) it.getString(numIdx) ?: "" else ""
                                 val cleanRow = rowNum.replace(Regex("[^0-9]"), "")
                                 val rowLast10 = if (cleanRow.length >= 10) cleanRow.takeLast(10) else cleanRow
 
-                                if (targetLast10.isNotEmpty() && (rowLast10 == targetLast10 || cleanRow.contains(targetLast10))) {
+                                if (targetLast10.isNotEmpty() && (rowLast10 == targetLast10 || cleanRow.contains(targetLast10) || targetLast10.contains(rowLast10))) {
                                     callFound = true
                                     val dur = if (durIdx >= 0) it.getLong(durIdx) else 0L
                                     val callType = if (typeIdx >= 0) it.getInt(typeIdx) else CallLog.Calls.OUTGOING_TYPE
@@ -590,6 +591,10 @@ class CallTrackerModule(
                                     // >0 = real connected talk time (seconds actually spoken).
                                     if (dur > 0L && callType != CallLog.Calls.MISSED_TYPE && callType != CallLog.Calls.REJECTED_TYPE) {
                                         realDuration = dur
+                                        isConnected = true
+                                    } else if (offhookDuration >= 4L && callType != CallLog.Calls.MISSED_TYPE && callType != CallLog.Calls.REJECTED_TYPE) {
+                                        // Fallback to measured offhook duration if CallLog duration isn't flushed yet
+                                        realDuration = offhookDuration
                                         isConnected = true
                                     } else {
                                         realDuration = 0L
@@ -678,11 +683,14 @@ class CallTrackerModule(
                 }
 
                 TelephonyManager.CALL_STATE_IDLE -> {
+                    val offhookDuration = if (startedAt != null && startedAt!! > 0L) {
+                        (System.currentTimeMillis() - startedAt!!) / 1000L
+                    } else 0L
                     startedAt = null
                     val targetNum = appInitiatedNumber ?: ""
                     val dialedTime = appCallDialedTime
                     sendCallState(stateName)
-                    fetchLatestCallLogAndEmit(targetNum, dialedTime)
+                    fetchLatestCallLogAndEmit(targetNum, dialedTime, offhookDuration)
                 }
 
                 else -> {

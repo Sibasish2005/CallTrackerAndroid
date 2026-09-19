@@ -71,11 +71,13 @@ export const LeadDispositionModal: React.FC<LeadDispositionModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hasConnectedCall = Boolean(lead?.hasConnectedCall);
+  const cachedLead = lead ? assignedLeadsService.findAssignedLead(lead.phoneNumber) : null;
+  const hasConnectedCall = Boolean(lead?.hasConnectedCall || cachedLead?.hasConnectedCall);
 
   useEffect(() => {
     if (lead) {
-      const isConnected = Boolean(lead.hasConnectedCall);
+      const cached = assignedLeadsService.findAssignedLead(lead.phoneNumber);
+      const isConnected = Boolean(lead.hasConnectedCall || cached?.hasConnectedCall);
       if (isConnected) {
         setSelectedStatus(
           lead.status === 'NEW' || lead.status === 'ASSIGNED' ? 'CONTACTED' : lead.status
